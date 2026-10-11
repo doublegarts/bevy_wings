@@ -1,0 +1,21 @@
+[package]
+name = "dga-bevy-wings-ui-shaders"
+description = "Custom WESL UI materials for Bevy Wings UI: ripple, shimmer, circular progress, aurora and frosted glass."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+bevy = { workspace = true, features = ["std", "bevy_ui", "bevy_ui_render", "bevy_render", "bevy_asset", "bevy_shader", "bevy_color"] }
+dga-bevy-wings-ui-core = { workspace = true }
+
+[dev-dependencies]
+naga = { workspace = true }
+
+[lints]
+workspace = true

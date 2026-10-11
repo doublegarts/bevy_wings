@@ -1,0 +1,68 @@
+name: Publish to crates.io
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Verify only (select a vX.Y.Z tag to publish)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# Serialize publication because all crates share one release version.
+concurrency:
+  group: crates-io-publish
+  cancel-in-progress: false
+
+jobs:
+  release-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate version and release tag
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            python3 scripts/check-release.py
+          else
+            test "$GITHUB_REF_TYPE" = "tag"
+            python3 scripts/check-release.py --tag "$GITHUB_REF_NAME"
+          fi
+
+  checks:
+    needs: release-version
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: [release-version, checks]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libudev-dev libx11-dev libxi-dev libxrandr-dev libxcursor-dev libxkbcommon-dev
+      - name: Publish all library crates in dependency order
+        if: github.event_name == 'release' || !inputs.dry_run
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo 'Set the CARGO_REGISTRY_TOKEN repository secret before publishing.' >&2
+            exit 1
+          fi
+          cargo publish --workspace --exclude wings-gallery --locked
+      - name: Dry run completed
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: echo 'All CI checks and package verification passed; nothing was uploaded.'

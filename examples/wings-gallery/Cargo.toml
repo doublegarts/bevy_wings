@@ -1,0 +1,28 @@
+[package]
+name = "wings-gallery"
+description = "Gallery app showing every Wings widget, theme switching, navigation, dependency injection and MVVM."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+dga-bevy-wings-framework = { path = "../.." }
+bevy = { workspace = true, features = [
+    "default_app",
+    "ui_api",
+    "ui_bevy_render",
+    "scene",
+    "bevy_ui_widgets",
+    "bevy_picking",
+    "ui_picking",
+    "bevy_winit",
+    "x11",
+    "std",
+    "multi_threaded",
+    "default_font",
+] }
+
+[lints]
+workspace = true

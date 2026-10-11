@@ -1,0 +1,18 @@
+[package]
+name = "dga-bevy-wings-data"
+description = "Data layer of the Wings framework: data sources, offline first repositories, caching policies, mappers and ECS integrated background loading."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+bevy = { workspace = true, features = ["std"] }
+dga-bevy-wings-domain = { workspace = true }
+
+[lints]
+workspace = true

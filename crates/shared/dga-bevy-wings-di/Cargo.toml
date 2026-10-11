@@ -1,0 +1,17 @@
+[package]
+name = "dga-bevy-wings-di"
+description = "Lightweight dependency injection for Bevy: modules, singletons, factories, scopes, qualifiers and an Inject system parameter."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+bevy = { workspace = true, features = ["std", "bevy_log"] }
+
+[lints]
+workspace = true
