@@ -1,5 +1,5 @@
 //! Cached reads, offline writes and synchronization after reconnecting.
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq)]

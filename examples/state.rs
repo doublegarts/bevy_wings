@@ -1,5 +1,5 @@
 //! Versioned values and memoized derived state without a window.
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 
 fn main() {
     let mut count = WingsState::new(1);

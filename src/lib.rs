@@ -1,4 +1,4 @@
-//! # dga-bevy-wings-framework
+//! # bevy_wings
 //!
 //! A layered app framework for **Bevy 0.20**, split into three layers plus shared
 //! infrastructure:
@@ -13,24 +13,24 @@
 //!
 //! | Module | Crate | Layer | Purpose |
 //! | --- | --- | --- | --- |
-//! | [`domain`] | `dga-bevy-wings-domain` | Domain | Entities, use cases, validation, repository traits, `Loadable` |
-//! | [`data`] | `dga-bevy-wings-data` | Data | Sources, offline first repositories, caching, background loads |
-//! | [`di`] | `dga-bevy-wings-di` | Shared | Modules, singletons, factories, scopes, `Inject` |
-//! | [`foundation`] | `dga-bevy-wings-ui-core` | Presentation | System sets, reactive state, opacity, hierarchy helpers |
-//! | [`animation`] | `dga-bevy-wings-ui-animation` | Presentation | Tweens, springs, keyframes, animated visibility |
-//! | [`theme`] | `dga-bevy-wings-ui-theme` | Presentation | Color schemes, typography, shapes, elevation, ECS painter |
-//! | [`responsive`] | `dga-bevy-wings-ui-responsive` | Presentation | Width classes, responsive nodes and visibility |
-//! | [`modifier`] | `dga-bevy-wings-ui-modifier` | Presentation | Chainable layout and style modifiers |
-//! | [`widgets`] | `dga-bevy-wings-ui-widgets` | Presentation | `WingsButton`, `WingsText`, `WingsCard` and friends |
-//! | [`mvvm`] | `dga-bevy-wings-ui-mvvm` | Presentation | View models, bindings, one shot effects |
-//! | [`navigation`] | `dga-bevy-wings-ui-navigation` | Presentation | Back stack, nav display, adaptive panes |
-//! | `shaders` | `dga-bevy-wings-ui-shaders` | Presentation | Ripple, shimmer, circular progress, aurora, glass |
+//! | [`domain`] | `bevy_wings_domain` | Domain | Entities, use cases, validation, repository traits, `Loadable` |
+//! | [`data`] | `bevy_wings_data` | Data | Sources, offline first repositories, caching, background loads |
+//! | [`di`] | `bevy_wings_di` | Shared | Modules, singletons, factories, scopes, `Inject` |
+//! | [`foundation`] | `bevy_wings_ui_core` | Presentation | System sets, reactive state, opacity, hierarchy helpers |
+//! | [`animation`] | `bevy_wings_ui_animation` | Presentation | Tweens, springs, keyframes, animated visibility |
+//! | [`theme`] | `bevy_wings_ui_theme` | Presentation | Color schemes, typography, shapes, elevation, ECS painter |
+//! | [`responsive`] | `bevy_wings_ui_responsive` | Presentation | Width classes, responsive nodes and visibility |
+//! | [`modifier`] | `bevy_wings_ui_modifiers` | Presentation | Chainable layout and style modifiers |
+//! | [`widgets`] | `bevy_wings_ui_widgets` | Presentation | `WingsButton`, `WingsText`, `WingsCard` and friends |
+//! | [`mvvm`] | `bevy_wings_ui_mvvm` | Presentation | View models, bindings, one shot effects |
+//! | [`navigation`] | `bevy_wings_ui_navigation` | Presentation | Back stack, nav display, adaptive panes |
+//! | `shaders` | `bevy_wings_ui_shaders` | Presentation | Ripple, shimmer, circular progress, aurora, glass |
 //!
 //! ## Quick start
 //!
 //! ```ignore
 //! use bevy::prelude::*;
-//! use dga_bevy_wings_framework::prelude::*;
+//! use bevy_wings::prelude::*;
 //!
 //! fn main() {
 //!     App::new()
@@ -64,19 +64,19 @@
 //! Add [`WingsUiPlugins`] after `DefaultPlugins`, because the widgets reuse the headless widget
 //! plugins that `DefaultPlugins` already registers.
 
-pub use dga_bevy_wings_data as data;
-pub use dga_bevy_wings_di as di;
-pub use dga_bevy_wings_domain as domain;
-pub use dga_bevy_wings_ui_animation as animation;
-pub use dga_bevy_wings_ui_core as foundation;
-pub use dga_bevy_wings_ui_modifier as modifier;
-pub use dga_bevy_wings_ui_mvvm as mvvm;
-pub use dga_bevy_wings_ui_navigation as navigation;
-pub use dga_bevy_wings_ui_responsive as responsive;
+pub use bevy_wings_data as data;
+pub use bevy_wings_di as di;
+pub use bevy_wings_domain as domain;
+pub use bevy_wings_ui_animation as animation;
+pub use bevy_wings_ui_core as foundation;
+pub use bevy_wings_ui_modifiers as modifier;
+pub use bevy_wings_ui_mvvm as mvvm;
+pub use bevy_wings_ui_navigation as navigation;
+pub use bevy_wings_ui_responsive as responsive;
 #[cfg(feature = "shaders")]
-pub use dga_bevy_wings_ui_shaders as shaders;
-pub use dga_bevy_wings_ui_theme as theme;
-pub use dga_bevy_wings_ui_widgets as widgets;
+pub use bevy_wings_ui_shaders as shaders;
+pub use bevy_wings_ui_theme as theme;
+pub use bevy_wings_ui_widgets as widgets;
 
 use bevy::app::{PluginGroup, PluginGroupBuilder};
 
@@ -111,22 +111,22 @@ impl PluginGroup for WingsUiPlugins {
 /// Everything needed to build apps with Wings (all layers), in one import.
 pub mod prelude {
     pub use crate::WingsUiPlugins;
-    pub use dga_bevy_wings_data::prelude::*;
-    pub use dga_bevy_wings_di::prelude::*;
-    pub use dga_bevy_wings_domain::prelude::*;
-    pub use dga_bevy_wings_ui_animation::prelude::*;
-    pub use dga_bevy_wings_ui_core::prelude::*;
-    pub use dga_bevy_wings_ui_modifier::prelude::*;
-    pub use dga_bevy_wings_ui_mvvm::prelude::*;
-    pub use dga_bevy_wings_ui_navigation::prelude::*;
-    pub use dga_bevy_wings_ui_responsive::prelude::*;
+    pub use bevy_wings_data::prelude::*;
+    pub use bevy_wings_di::prelude::*;
+    pub use bevy_wings_domain::prelude::*;
+    pub use bevy_wings_ui_animation::prelude::*;
+    pub use bevy_wings_ui_core::prelude::*;
+    pub use bevy_wings_ui_modifiers::prelude::*;
+    pub use bevy_wings_ui_mvvm::prelude::*;
+    pub use bevy_wings_ui_navigation::prelude::*;
+    pub use bevy_wings_ui_responsive::prelude::*;
     #[cfg(feature = "shaders")]
-    pub use dga_bevy_wings_ui_shaders::{
+    pub use bevy_wings_ui_shaders::{
         WingsAuroraMaterial, WingsCircularProgressMaterial, WingsGlassMaterial,
         WingsRippleMaterial, WingsShimmerMaterial,
     };
-    pub use dga_bevy_wings_ui_theme::prelude::*;
-    pub use dga_bevy_wings_ui_widgets::prelude::*;
+    pub use bevy_wings_ui_theme::prelude::*;
+    pub use bevy_wings_ui_widgets::prelude::*;
 }
 
 #[cfg(test)]

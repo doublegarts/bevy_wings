@@ -1,0 +1,21 @@
+[package]
+name = "bevy_wings_ui_navigation"
+description = "Type safe, back stack driven navigation for Bevy UI with bsn! destinations, transitions, adaptive two pane layouts and per entry scopes."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+bevy = { workspace = true, features = ["std", "bevy_ui", "bevy_scene", "bevy_asset", "bevy_log"] }
+bevy_wings_ui_core = { workspace = true }
+bevy_wings_ui_animation = { workspace = true }
+bevy_wings_ui_responsive = { workspace = true }
+bevy_wings_di = { workspace = true }
+
+[lints]
+workspace = true

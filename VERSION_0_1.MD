@@ -16,19 +16,19 @@ the logic around it is tested.
 
 ### Workspace and tooling
 
-- [x] Repository and main crate named `dga_bevy_wings_framework` (package `dga-bevy-wings-framework`)
+- [x] Repository and main crate named `bevy_wings` (package `bevy_wings`)
 - [x] Crates grouped by layer: `crates/domain`, `crates/data`, `crates/presentation`, `crates/shared`
 - [x] Cargo workspace with 12 library crates, a facade crate and an example
 - [x] Bevy 0.20 only, Rust 1.97.1 minimum, edition 2024
 - [x] `missing_docs` lint enabled for every crate, `unsafe_code` forbidden
 - [x] Clippy clean (`cargo clippy --workspace --all-targets`)
-- [x] Facade crate `dga-bevy-wings-framework` with module re-exports for every layer and one `prelude`
+- [x] Facade crate `bevy_wings` with module re-exports for every layer and one `prelude`
 - [x] `WingsUiPlugins` plugin group (core, animation, theme, responsive, modifier, shaders, widgets)
 - [x] `shaders` cargo feature (default on), crates build with it off
 - [x] README with a guide for every crate
 - [x] This checklist
 
-### Domain layer (`dga-bevy-wings-domain`)
+### Domain layer (`bevy_wings_domain`)
 
 - [x] No dependencies (plain Rust)
 - [x] Typed ids `Id<T>` and the `DomainEntity` trait
@@ -39,7 +39,7 @@ the logic around it is tested.
 - [x] `PageRequest` and `Page<T>`
 - [x] `Loadable<T>` that keeps the previous value while loading and after failures
 
-### Data layer (`dga-bevy-wings-data`)
+### Data layer (`bevy_wings_data`)
 
 - [x] `DataSource` contract and thread safe `MemorySource`
 - [x] `RemoteSource` contract and `FakeRemote` (offline switch, call counter)
@@ -50,7 +50,7 @@ the logic around it is tested.
 - [x] `Mapper` for transfer objects
 - [x] Background loads on the async compute pool into a `WingsLoadable<T>` component, with `WingsLoadFinished`
 
-### Presentation: core (`dga-bevy-wings-ui-core`)
+### Presentation: core (`bevy_wings_ui_core`)
 
 - [x] `WingsUiSystems` chained system sets (Input, ViewModel, Bind, Navigation, Responsive, Modifier, Style, Theme, Animate)
 - [x] `WingsCorePlugin` and `ensure_core` so every plugin can be added alone
@@ -59,7 +59,7 @@ the logic around it is tested.
 - [x] `WingsOpacity` subtree opacity with clamping and effective opacity
 - [x] Hierarchy helpers `ancestors` and `find_ancestor_with`
 
-### Presentation: animation (`dga-bevy-wings-ui-animation`)
+### Presentation: animation (`bevy_wings_ui_animation`)
 
 - [x] 16 easing curves including cubic bezier, back, elastic, bounce, steps and Bevy `EaseFunction`
 - [x] `AnimationSpec`: tween, millis, short, medium, long, spring, snap, delay, stagger
@@ -74,7 +74,7 @@ the logic around it is tested.
 - [x] Keyframes with per segment easing and presets (shake, heartbeat, blink)
 - [x] `WingsAnimatedVisibility` with fade, scale and slide enter and exit transitions
 
-### Presentation: theme (`dga-bevy-wings-ui-theme`)
+### Presentation: theme (`bevy_wings_ui_theme`)
 
 - [x] 38 color roles plus custom roles
 - [x] Light and dark schemes, seeded schemes from one color (Oklch tonal palettes)
@@ -90,7 +90,7 @@ the logic around it is tested.
 - [x] Local light or dark subtrees (`WingsLocalTheme`)
 - [x] 20 buttons switch from light to dark with one theme change (tested in theme and widgets crates)
 
-### Presentation: responsiveness (`dga-bevy-wings-ui-responsive`)
+### Presentation: responsiveness (`bevy_wings_ui_responsive`)
 
 - [x] Width classes (compact, medium, expanded, large, extra large), height classes, orientation
 - [x] Configurable breakpoints
@@ -100,20 +100,20 @@ the logic around it is tested.
 - [x] Responsive node patches, visibility, grid columns and components
 - [x] Automatic UI scale per class
 
-### Presentation: modifiers (`dga-bevy-wings-ui-modifier`)
+### Presentation: modifiers (`bevy_wings_ui_modifiers`)
 
 - [x] Chainable `WingsModifier` with layout, paint, shape, elevation, transform and opacity operations
 - [x] Folding only when the modifier changes, later operations win
 - [x] Hover scale feedback
 
-### Presentation: custom UI shaders (`dga-bevy-wings-ui-shaders`)
+### Presentation: custom UI shaders (`bevy_wings_ui_shaders`)
 
 - [x] Ripple, shimmer, circular progress, aurora and glass WESL shaders, validated with naga
 - [x] Uniform layouts checked against the Rust material structs
 - [x] Helper math (ripple center and radius, progress clamping) tested
 - [~] Rendering on screen (needs a GPU, not available in the test environment)
 
-### Presentation: widgets (`dga-bevy-wings-ui-widgets`)
+### Presentation: widgets (`bevy_wings_ui_widgets`)
 
 - [x] `WingsText`, `WingsIcon` (icon tint follows the content color)
 - [x] `WingsColumn`, `WingsRow`, `WingsBox`, `WingsSpacer`, `WingsDivider`, `WingsScrollColumn`, `WingsGrid`
@@ -138,7 +138,7 @@ the logic around it is tested.
 - [~] Press ripple from the pointer position (spawning logic compiled, visuals need a GPU)
 - [x] Headless mode for tests and servers
 
-### Presentation: navigation (`dga-bevy-wings-ui-navigation`)
+### Presentation: navigation (`bevy_wings_ui_navigation`)
 
 - [x] `WingsBackStack<K>` resource with push, single top, bring to top, pop, replace, pop to, reset
 - [x] Navigation graph from a key to a `bsn!` scene destination
@@ -149,7 +149,7 @@ the logic around it is tested.
 - [x] Back on Escape and mouse back button
 - [x] One DI scope per entry
 
-### Shared: dependency injection (`dga-bevy-wings-di`)
+### Shared: dependency injection (`bevy_wings_di`)
 
 - [x] Modules with single, eager single, instance, factory, scoped and parameterized definitions
 - [x] Named qualifiers
@@ -159,7 +159,7 @@ the logic around it is tested.
 - [x] `verify()` to build every definition in a test
 - [x] `Inject<T>` system parameter, world extension, entity scopes closed on despawn
 
-### Presentation: MVVM (`dga-bevy-wings-ui-mvvm`)
+### Presentation: MVVM (`bevy_wings_ui_mvvm`)
 
 - [x] `WingsViewModel` components with `on_cleared` lifecycle
 - [x] Text, visible, enabled, checked and generic component bindings

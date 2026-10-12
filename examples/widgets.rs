@@ -1,7 +1,7 @@
 //! Interactive controls, text input, a progress indicator and snackbars.
 mod support;
 use bevy::prelude::*;
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 
 fn main() {
     support::run("Wings: widgets", configure);

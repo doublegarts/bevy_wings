@@ -1,0 +1,19 @@
+[package]
+name = "bevy_wings_ui_theme"
+description = "ECS theming for Bevy Wings UI: color roles, light and dark schemes, typography, shapes, elevation and live theme switching."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+bevy = { workspace = true, features = ["std", "bevy_ui", "bevy_text", "bevy_color", "bevy_window"] }
+bevy_wings_ui_core = { workspace = true }
+bevy_wings_ui_animation = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,7 +1,7 @@
 //! A component view model, change-driven text bindings and button intents.
 mod support;
 use bevy::prelude::*;
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 
 #[derive(Component, Default, Clone)]
 struct Counter {

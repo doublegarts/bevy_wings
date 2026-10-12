@@ -2,7 +2,7 @@
 mod support;
 use bevy::prelude::*;
 use bevy::ui_render::prelude::MaterialNode;
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 
 fn main() {
     support::run("Wings: shaders", configure);

@@ -12,7 +12,7 @@
 //! Run with `cargo run -p wings-gallery`.
 
 use bevy::prelude::*;
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 use std::sync::Arc;
 
 /// Navigation keys.

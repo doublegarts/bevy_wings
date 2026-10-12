@@ -2,21 +2,21 @@
 resolver = "3"
 members = [
     # Shared
-    "crates/shared/dga-bevy-wings-di",
+    "crates/shared/bevy_wings_di",
     # Domain layer
-    "crates/domain/dga-bevy-wings-domain",
+    "crates/domain/bevy_wings_domain",
     # Data layer
-    "crates/data/dga-bevy-wings-data",
+    "crates/data/bevy_wings_data",
     # Presentation layer
-    "crates/presentation/dga-bevy-wings-ui-core",
-    "crates/presentation/dga-bevy-wings-ui-animation",
-    "crates/presentation/dga-bevy-wings-ui-theme",
-    "crates/presentation/dga-bevy-wings-ui-responsive",
-    "crates/presentation/dga-bevy-wings-ui-modifier",
-    "crates/presentation/dga-bevy-wings-ui-shaders",
-    "crates/presentation/dga-bevy-wings-ui-widgets",
-    "crates/presentation/dga-bevy-wings-ui-mvvm",
-    "crates/presentation/dga-bevy-wings-ui-navigation",
+    "crates/presentation/bevy_wings_ui_core",
+    "crates/presentation/bevy_wings_ui_animation",
+    "crates/presentation/bevy_wings_ui_theme",
+    "crates/presentation/bevy_wings_ui_responsive",
+    "crates/presentation/bevy_wings_ui_modifiers",
+    "crates/presentation/bevy_wings_ui_shaders",
+    "crates/presentation/bevy_wings_ui_widgets",
+    "crates/presentation/bevy_wings_ui_mvvm",
+    "crates/presentation/bevy_wings_ui_navigation",
     "examples/wings-gallery",
 ]
 
@@ -26,7 +26,7 @@ edition = "2024"
 rust-version = "1.97.1"
 license = "MIT"
 authors = ["Gabriel Gheorghe"]
-repository = "https://github.com/doublegarts/dga_bevy_wings_framework"
+repository = "https://github.com/doublegarts/bevy_wings"
 keywords = ["bevy", "ui", "framework", "mvvm", "ecs"]
 categories = ["game-development", "gui"]
 
@@ -34,18 +34,18 @@ categories = ["game-development", "gui"]
 bevy = { version = "0.20.0", default-features = false }
 naga = { version = "30.0.1", features = ["wgsl-in"] }
 
-dga-bevy-wings-ui-core = { path = "crates/presentation/dga-bevy-wings-ui-core", version = "0.1.0" }
-dga-bevy-wings-ui-animation = { path = "crates/presentation/dga-bevy-wings-ui-animation", version = "0.1.0" }
-dga-bevy-wings-ui-theme = { path = "crates/presentation/dga-bevy-wings-ui-theme", version = "0.1.0" }
-dga-bevy-wings-ui-responsive = { path = "crates/presentation/dga-bevy-wings-ui-responsive", version = "0.1.0" }
-dga-bevy-wings-ui-modifier = { path = "crates/presentation/dga-bevy-wings-ui-modifier", version = "0.1.0" }
-dga-bevy-wings-ui-shaders = { path = "crates/presentation/dga-bevy-wings-ui-shaders", version = "0.1.0" }
-dga-bevy-wings-ui-widgets = { path = "crates/presentation/dga-bevy-wings-ui-widgets", version = "0.1.0", default-features = false }
-dga-bevy-wings-di = { path = "crates/shared/dga-bevy-wings-di", version = "0.1.0" }
-dga-bevy-wings-domain = { path = "crates/domain/dga-bevy-wings-domain", version = "0.1.0" }
-dga-bevy-wings-data = { path = "crates/data/dga-bevy-wings-data", version = "0.1.0" }
-dga-bevy-wings-ui-mvvm = { path = "crates/presentation/dga-bevy-wings-ui-mvvm", version = "0.1.0" }
-dga-bevy-wings-ui-navigation = { path = "crates/presentation/dga-bevy-wings-ui-navigation", version = "0.1.0" }
+bevy_wings_ui_core = { path = "crates/presentation/bevy_wings_ui_core", version = "0.1.0" }
+bevy_wings_ui_animation = { path = "crates/presentation/bevy_wings_ui_animation", version = "0.1.0" }
+bevy_wings_ui_theme = { path = "crates/presentation/bevy_wings_ui_theme", version = "0.1.0" }
+bevy_wings_ui_responsive = { path = "crates/presentation/bevy_wings_ui_responsive", version = "0.1.0" }
+bevy_wings_ui_modifiers = { path = "crates/presentation/bevy_wings_ui_modifiers", version = "0.1.0" }
+bevy_wings_ui_shaders = { path = "crates/presentation/bevy_wings_ui_shaders", version = "0.1.0" }
+bevy_wings_ui_widgets = { path = "crates/presentation/bevy_wings_ui_widgets", version = "0.1.0", default-features = false }
+bevy_wings_di = { path = "crates/shared/bevy_wings_di", version = "0.1.0" }
+bevy_wings_domain = { path = "crates/domain/bevy_wings_domain", version = "0.1.0" }
+bevy_wings_data = { path = "crates/data/bevy_wings_data", version = "0.1.0" }
+bevy_wings_ui_mvvm = { path = "crates/presentation/bevy_wings_ui_mvvm", version = "0.1.0" }
+bevy_wings_ui_navigation = { path = "crates/presentation/bevy_wings_ui_navigation", version = "0.1.0" }
 
 [workspace.lints.rust]
 missing_docs = "warn"
@@ -56,7 +56,7 @@ type_complexity = "allow"
 too_many_arguments = "allow"
 
 [package]
-name = "dga-bevy-wings-framework"
+name = "bevy_wings"
 description = "Layered app framework for Bevy 0.20: data, domain and presentation crates with ECS native widgets, theming, animation, navigation, dependency injection and MVVM."
 readme = "README.md"
 include = ["src/**", "examples/*.rs", "examples/support/**", "README.md", "LICENSE", "Cargo.toml", "Cargo.lock"]
@@ -70,28 +70,28 @@ keywords.workspace = true
 categories.workspace = true
 
 [lib]
-name = "dga_bevy_wings_framework"
+name = "bevy_wings"
 path = "src/lib.rs"
 
 [features]
 default = ["shaders"]
 ## Custom UI shaders (requires the Bevy render stack).
-shaders = ["dep:dga-bevy-wings-ui-shaders", "dga-bevy-wings-ui-widgets/shaders"]
+shaders = ["dep:bevy_wings_ui_shaders", "bevy_wings_ui_widgets/shaders"]
 
 [dependencies]
 bevy = { workspace = true, features = ["std", "bevy_ui", "bevy_scene"] }
-dga-bevy-wings-ui-core = { workspace = true }
-dga-bevy-wings-ui-animation = { workspace = true }
-dga-bevy-wings-ui-theme = { workspace = true }
-dga-bevy-wings-ui-responsive = { workspace = true }
-dga-bevy-wings-ui-modifier = { workspace = true }
-dga-bevy-wings-ui-shaders = { workspace = true, optional = true }
-dga-bevy-wings-ui-widgets = { workspace = true, default-features = false }
-dga-bevy-wings-di = { workspace = true }
-dga-bevy-wings-domain = { workspace = true }
-dga-bevy-wings-data = { workspace = true }
-dga-bevy-wings-ui-mvvm = { workspace = true }
-dga-bevy-wings-ui-navigation = { workspace = true }
+bevy_wings_ui_core = { workspace = true }
+bevy_wings_ui_animation = { workspace = true }
+bevy_wings_ui_theme = { workspace = true }
+bevy_wings_ui_responsive = { workspace = true }
+bevy_wings_ui_modifiers = { workspace = true }
+bevy_wings_ui_shaders = { workspace = true, optional = true }
+bevy_wings_ui_widgets = { workspace = true, default-features = false }
+bevy_wings_di = { workspace = true }
+bevy_wings_domain = { workspace = true }
+bevy_wings_data = { workspace = true }
+bevy_wings_ui_mvvm = { workspace = true }
+bevy_wings_ui_navigation = { workspace = true }
 
 [lints]
 workspace = true

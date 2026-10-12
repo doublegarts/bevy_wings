@@ -1,10 +1,10 @@
 # Wings Framework for Bevy
 
-[![crates.io](https://img.shields.io/crates/v/dga-bevy-wings-framework.svg)](https://crates.io/crates/dga-bevy-wings-framework)
-[![docs](https://docs.rs/dga-bevy-wings-framework/badge.svg)](https://docs.rs/dga-bevy-wings-framework/latest/dga_bevy_wings_framework/)
-[![CI](https://github.com/doublegarts/dga_bevy_wings_framework/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/doublegarts/dga_bevy_wings_framework/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/bevy_wings.svg)](https://crates.io/crates/bevy_wings)
+[![docs](https://docs.rs/bevy_wings/badge.svg)](https://docs.rs/bevy_wings/latest/bevy_wings/)
+[![CI](https://github.com/doublegarts/bevy_wings/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/doublegarts/bevy_wings/actions/workflows/ci.yml)
 
-**dga_bevy_wings_framework** is a layered application framework for **Bevy 0.20**. It is split
+**bevy_wings** is a layered application framework for **Bevy 0.20**. It is split
 into **data**, **domain** and **presentation** crates, wired together with dependency
 injection:
 
@@ -32,7 +32,7 @@ no retained widget tree next to the ECS, no virtual DOM and no hidden controller
 
 ```rust
 use bevy::prelude::*;
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 
 fn main() {
     App::new()
@@ -144,23 +144,22 @@ runtime reapplies the chain. `Children [...]` describes the hierarchy.
 
 | Folder | Crate | What it contains |
 | --- | --- | --- |
-| `/` | `dga-bevy-wings-framework` | Facade: re-exports every crate, `WingsUiPlugins`, one `prelude` |
-| `crates/domain` | `dga-bevy-wings-domain` | Entities, `Id<T>`, use cases, validation, repository traits, paging, `Loadable` |
-| `crates/data` | `dga-bevy-wings-data` | Data sources, offline first repositories, caching, mappers, background loads |
-| `crates/shared` | `dga-bevy-wings-di` | Dependency injection container, modules and scopes |
-| `crates/presentation` | `dga-bevy-wings-ui-core` | `WingsUiSystems` sets, `WingsState`, `WingsMemo`, `WingsOpacity`, hierarchy helpers |
-| `crates/presentation` | `dga-bevy-wings-ui-animation` | Easing, tweens, springs, keyframes, property animators, animated visibility |
-| `crates/presentation` | `dga-bevy-wings-ui-theme` | Color schemes (seeded), typography, shapes, spacing, elevation, motion, the painter |
-| `crates/presentation` | `dga-bevy-wings-ui-responsive` | Breakpoints, viewport, responsive nodes, visibility, columns, auto scale |
-| `crates/presentation` | `dga-bevy-wings-ui-modifier` | `WingsModifier` chains and hover scale |
-| `crates/presentation` | `dga-bevy-wings-ui-shaders` | WESL UI materials: ripple, shimmer, circular progress, aurora, glass |
-| `crates/presentation` | `dga-bevy-wings-ui-widgets` | All `Wings*` widgets |
-| `crates/presentation` | `dga-bevy-wings-ui-mvvm` | View models, bindings, intents, effects |
-| `crates/presentation` | `dga-bevy-wings-ui-navigation` | Back stack, navigation graph and display, adaptive panes |
+| `/` | `bevy_wings` | Facade: re-exports every crate, `WingsUiPlugins`, one `prelude` |
+| `crates/domain` | `bevy_wings_domain` | Entities, `Id<T>`, use cases, validation, repository traits, paging, `Loadable` |
+| `crates/data` | `bevy_wings_data` | Data sources, offline first repositories, caching, mappers, background loads |
+| `crates/shared` | `bevy_wings_di` | Dependency injection container, modules and scopes |
+| `crates/presentation` | `bevy_wings_ui_core` | `WingsUiSystems` sets, `WingsState`, `WingsMemo`, `WingsOpacity`, hierarchy helpers |
+| `crates/presentation` | `bevy_wings_ui_animation` | Easing, tweens, springs, keyframes, property animators, animated visibility |
+| `crates/presentation` | `bevy_wings_ui_theme` | Color schemes (seeded), typography, shapes, spacing, elevation, motion, the painter |
+| `crates/presentation` | `bevy_wings_ui_responsive` | Breakpoints, viewport, responsive nodes, visibility, columns, auto scale |
+| `crates/presentation` | `bevy_wings_ui_modifiers` | `WingsModifier` chains and hover scale |
+| `crates/presentation` | `bevy_wings_ui_shaders` | WESL UI materials: ripple, shimmer, circular progress, aurora, glass |
+| `crates/presentation` | `bevy_wings_ui_widgets` | All `Wings*` widgets |
+| `crates/presentation` | `bevy_wings_ui_mvvm` | View models, bindings, intents, effects |
+| `crates/presentation` | `bevy_wings_ui_navigation` | Back stack, navigation graph and display, adaptive panes |
 | `examples` | `wings-gallery` | A runnable gallery app using all three layers |
 
-The package name is `dga-bevy-wings-framework` and the import path is
-`dga_bevy_wings_framework` (Cargo treats `-` and `_` the same).
+The package name and Rust import path are both `bevy_wings`. All Wings library package names use underscores.
 
 Each crate can be used on its own. For example, the domain crate has no dependencies at all,
 the DI crate does not depend on any UI crate and the theme crate works with hand written Bevy
@@ -173,11 +172,10 @@ UI nodes.
 ```toml
 [dependencies]
 bevy = "0.20"
-dga-bevy-wings-framework = { git = "https://github.com/doublegarts/dga_bevy_wings_framework" }
+bevy_wings = "0.1"
 ```
 
-After the first crates.io release, replace the Git dependency with
-`dga-bevy-wings-framework = "0.1"`.
+For the development version, use `bevy_wings = { git = "https://github.com/doublegarts/bevy_wings" }`.
 
 Cargo features of the facade:
 
@@ -207,11 +205,11 @@ are added separately (see below).
 
 ## Domain layer
 
-`dga-bevy-wings-domain` holds the business rules. It has no dependencies, so it compiles and
+`bevy_wings_domain` holds the business rules. It has no dependencies, so it compiles and
 tests in moments and can be shared with servers or tools.
 
 ```rust
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 
 #[derive(Clone, Debug, PartialEq)]
 struct Todo { id: Id<Todo>, title: String, done: bool }
@@ -250,7 +248,7 @@ impl UseCase for CompleteTodo {
 
 ## Data layer
 
-`dga-bevy-wings-data` implements the domain contracts.
+`bevy_wings_data` implements the domain contracts.
 
 ```rust
 let repository = Arc::new(
@@ -429,7 +427,7 @@ asset files. The variable font supports the typography roles' regular and medium
 Explicit custom font assets remain available.
 
 Inter is bundled under the SIL Open Font License 1.1. The font and its license ship inside
-the theme crate; see [font provenance and license](crates/presentation/dga-bevy-wings-ui-theme/src/fonts/README.md).
+the theme crate; see [font provenance and license](crates/presentation/bevy_wings_ui_theme/src/fonts/README.md).
 
 To select your own font for every themed text role, set the typography font source:
 
@@ -833,7 +831,7 @@ visual rendering and real input still need a window. The example tests exercise 
 theme repainting, responsive layout, modifiers, MVVM intents, loading, navigation and snackbars:
 
 ```bash
-cargo test -p dga-bevy-wings-framework --examples --all-features --locked
+cargo test -p bevy_wings --examples --all-features --locked
 ```
 
 ## CI and crates.io releases
@@ -852,8 +850,8 @@ explicitly excluded. See [Cargo's publishing documentation](https://doc.rust-lan
 One-time setup:
 
 1. Push the complete project, including `Cargo.lock`, `scripts/` and `.github/workflows/`, to
-   `doublegarts/dga_bevy_wings_framework` on GitHub and enable Actions.
-2. Create a crates.io API token with publication permission for all the `dga-bevy-wings-*`
+   `doublegarts/bevy_wings` on GitHub and enable Actions.
+2. Create a crates.io API token with publication permission for all the `bevy_wings*`
    packages, including permission to create the names for the first release.
 3. Add it to GitHub **Settings → Secrets and variables → Actions → New repository secret**,
    named **`CARGO_REGISTRY_TOKEN`**. Keep the token out of source files.

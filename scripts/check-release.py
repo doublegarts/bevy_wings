@@ -29,6 +29,8 @@ def main():
     packages = {p["name"]: p for p in metadata["packages"] if p["id"] in members}
     publishable = {name: p for name, p in packages.items() if p["publish"] != []}
     for name, package in publishable.items():
+        if not (name == "bevy_wings" or name.startswith("bevy_wings_")) or "-" in name:
+            errors.append(f"{name} must use the bevy_wings package family with underscores")
         if package["version"] != version:
             errors.append(f"{name} version {package['version']} differs from {version}")
         for field in ("description", "license", "repository", "rust_version"):

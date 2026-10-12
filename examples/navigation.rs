@@ -1,7 +1,7 @@
 //! Push and pop destinations; wide windows show list and detail side by side.
 mod support;
 use bevy::prelude::*;
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum Screen {

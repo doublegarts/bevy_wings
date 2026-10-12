@@ -1581,6 +1581,128 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_wings"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_wings_data",
+ "bevy_wings_di",
+ "bevy_wings_domain",
+ "bevy_wings_ui_animation",
+ "bevy_wings_ui_core",
+ "bevy_wings_ui_modifiers",
+ "bevy_wings_ui_mvvm",
+ "bevy_wings_ui_navigation",
+ "bevy_wings_ui_responsive",
+ "bevy_wings_ui_shaders",
+ "bevy_wings_ui_theme",
+ "bevy_wings_ui_widgets",
+]
+
+[[package]]
+name = "bevy_wings_data"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_wings_domain",
+]
+
+[[package]]
+name = "bevy_wings_di"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
+name = "bevy_wings_domain"
+version = "0.1.0"
+
+[[package]]
+name = "bevy_wings_ui_animation"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_wings_ui_core",
+]
+
+[[package]]
+name = "bevy_wings_ui_core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
+name = "bevy_wings_ui_modifiers"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_wings_ui_animation",
+ "bevy_wings_ui_core",
+ "bevy_wings_ui_theme",
+]
+
+[[package]]
+name = "bevy_wings_ui_mvvm"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_wings_di",
+ "bevy_wings_ui_core",
+]
+
+[[package]]
+name = "bevy_wings_ui_navigation"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_wings_di",
+ "bevy_wings_ui_animation",
+ "bevy_wings_ui_core",
+ "bevy_wings_ui_responsive",
+]
+
+[[package]]
+name = "bevy_wings_ui_responsive"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_wings_ui_core",
+]
+
+[[package]]
+name = "bevy_wings_ui_shaders"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_wings_ui_core",
+ "naga",
+]
+
+[[package]]
+name = "bevy_wings_ui_theme"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_wings_ui_animation",
+ "bevy_wings_ui_core",
+]
+
+[[package]]
+name = "bevy_wings_ui_widgets"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_wings_ui_animation",
+ "bevy_wings_ui_core",
+ "bevy_wings_ui_modifiers",
+ "bevy_wings_ui_responsive",
+ "bevy_wings_ui_shaders",
+ "bevy_wings_ui_theme",
+]
+
+[[package]]
 name = "bevy_winit"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2021,128 +2143,6 @@ dependencies = [
  "rustc_version",
  "syn 2.0.119",
  "unicode-xid",
-]
-
-[[package]]
-name = "dga-bevy-wings-data"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "dga-bevy-wings-domain",
-]
-
-[[package]]
-name = "dga-bevy-wings-di"
-version = "0.1.0"
-dependencies = [
- "bevy",
-]
-
-[[package]]
-name = "dga-bevy-wings-domain"
-version = "0.1.0"
-
-[[package]]
-name = "dga-bevy-wings-framework"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "dga-bevy-wings-data",
- "dga-bevy-wings-di",
- "dga-bevy-wings-domain",
- "dga-bevy-wings-ui-animation",
- "dga-bevy-wings-ui-core",
- "dga-bevy-wings-ui-modifier",
- "dga-bevy-wings-ui-mvvm",
- "dga-bevy-wings-ui-navigation",
- "dga-bevy-wings-ui-responsive",
- "dga-bevy-wings-ui-shaders",
- "dga-bevy-wings-ui-theme",
- "dga-bevy-wings-ui-widgets",
-]
-
-[[package]]
-name = "dga-bevy-wings-ui-animation"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "dga-bevy-wings-ui-core",
-]
-
-[[package]]
-name = "dga-bevy-wings-ui-core"
-version = "0.1.0"
-dependencies = [
- "bevy",
-]
-
-[[package]]
-name = "dga-bevy-wings-ui-modifier"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "dga-bevy-wings-ui-animation",
- "dga-bevy-wings-ui-core",
- "dga-bevy-wings-ui-theme",
-]
-
-[[package]]
-name = "dga-bevy-wings-ui-mvvm"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "dga-bevy-wings-di",
- "dga-bevy-wings-ui-core",
-]
-
-[[package]]
-name = "dga-bevy-wings-ui-navigation"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "dga-bevy-wings-di",
- "dga-bevy-wings-ui-animation",
- "dga-bevy-wings-ui-core",
- "dga-bevy-wings-ui-responsive",
-]
-
-[[package]]
-name = "dga-bevy-wings-ui-responsive"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "dga-bevy-wings-ui-core",
-]
-
-[[package]]
-name = "dga-bevy-wings-ui-shaders"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "dga-bevy-wings-ui-core",
- "naga",
-]
-
-[[package]]
-name = "dga-bevy-wings-ui-theme"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "dga-bevy-wings-ui-animation",
- "dga-bevy-wings-ui-core",
-]
-
-[[package]]
-name = "dga-bevy-wings-ui-widgets"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "dga-bevy-wings-ui-animation",
- "dga-bevy-wings-ui-core",
- "dga-bevy-wings-ui-modifier",
- "dga-bevy-wings-ui-responsive",
- "dga-bevy-wings-ui-shaders",
- "dga-bevy-wings-ui-theme",
 ]
 
 [[package]]
@@ -5130,7 +5130,7 @@ name = "wings-gallery"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "dga-bevy-wings-framework",
+ "bevy_wings",
 ]
 
 [[package]]

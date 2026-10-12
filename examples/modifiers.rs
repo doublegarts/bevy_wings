@@ -1,7 +1,7 @@
 //! Compose layout, theme paint, shape, elevation and hover scale on a node.
 mod support;
 use bevy::prelude::*;
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 
 #[derive(Component, Default, Clone)]
 struct ModifiedCard;

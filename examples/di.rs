@@ -1,5 +1,5 @@
 //! Singleton sharing, factories, scoped services and dependency resolution.
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 use std::sync::Arc;
 
 struct Config {

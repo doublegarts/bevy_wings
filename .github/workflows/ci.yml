@@ -62,7 +62,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libudev-dev libx11-dev libxi-dev libxrandr-dev libxcursor-dev libxkbcommon-dev
       # The gallery enables the facade's default shaders feature, so exclude it here.
       - name: Check the facade without example dependencies
-        run: cargo check -p dga-bevy-wings-framework --lib --no-default-features --locked
+        run: cargo check -p bevy_wings --lib --no-default-features --locked
       - run: cargo clippy --workspace --exclude wings-gallery --all-targets --no-default-features --locked -- -D warnings
       - run: cargo test --workspace --exclude wings-gallery --all-targets --no-default-features --locked
       - run: cargo test --workspace --exclude wings-gallery --doc --no-default-features --locked

@@ -1,7 +1,7 @@
 //! Load on a background task, keep previous data while refreshing and show failures.
 mod support;
 use bevy::prelude::*;
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 
 #[derive(Component, Default, Clone)]
 struct ResultLabel;

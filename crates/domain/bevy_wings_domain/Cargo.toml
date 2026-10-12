@@ -1,0 +1,16 @@
+[package]
+name = "bevy_wings_domain"
+description = "Domain layer of the Wings framework: entities, typed ids, use cases, validation, repository contracts, paging and loading states. Plain Rust, no engine dependency."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

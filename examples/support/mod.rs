@@ -1,7 +1,7 @@
 //! Shared window and headless setup for the focused UI examples.
 
 use bevy::prelude::*;
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 
 /// Runs a window, or 120 fixed frames when `--headless` is passed.
 pub fn run(title: &str, configure: impl FnOnce(&mut App)) {

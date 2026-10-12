@@ -1,0 +1,20 @@
+[package]
+name = "bevy_wings_ui_modifiers"
+description = "Chainable, ECS applied modifiers (layout, paint, transform, interaction) for Bevy Wings UI."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+bevy = { workspace = true, features = ["std", "bevy_ui", "bevy_picking", "ui_picking"] }
+bevy_wings_ui_core = { workspace = true }
+bevy_wings_ui_animation = { workspace = true }
+bevy_wings_ui_theme = { workspace = true }
+
+[lints]
+workspace = true

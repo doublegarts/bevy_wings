@@ -1,7 +1,7 @@
 //! Toggle light/dark mode and choose a seeded color scheme.
 mod support;
 use bevy::prelude::*;
-use dga_bevy_wings_framework::prelude::*;
+use bevy_wings::prelude::*;
 
 fn main() {
     support::run("Wings: theme", configure);
