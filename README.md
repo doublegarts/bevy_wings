@@ -1,5 +1,9 @@
 # Wings Framework for Bevy
 
+[![crates.io](https://img.shields.io/crates/v/dga-bevy-wings-framework.svg)](https://crates.io/crates/dga-bevy-wings-framework)
+[![docs](https://docs.rs/dga-bevy-wings-framework/badge.svg)](https://docs.rs/dga-bevy-wings-framework/latest/dga_bevy_wings_framework/)
+[![CI](https://github.com/doublegarts/dga_bevy_wings_framework/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/doublegarts/dga_bevy_wings_framework/actions/workflows/ci.yml)
+
 **dga_bevy_wings_framework** is a layered application framework for **Bevy 0.20**. It is split
 into **data**, **domain** and **presentation** crates, wired together with dependency
 injection:
