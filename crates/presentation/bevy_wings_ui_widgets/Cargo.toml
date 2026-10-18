@@ -26,3 +26,7 @@ bevy_wings_ui_shaders = { workspace = true, optional = true }
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "stress"
+harness = false

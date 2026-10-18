@@ -32,8 +32,8 @@ use bevy::window::SystemCursorIcon;
 
 use bevy_wings_ui_responsive::{WidthClass, WingsResponsiveVisibility};
 use bevy_wings_ui_theme::prelude::{
-    ColorRole, ShapeRole, TypeRole, WingsBackground, WingsContentColor, WingsElevationLevel,
-    WingsPaint, WingsShape,
+    ColorRole, ShapeRole, TypeRole, WingsBackground, WingsBorderPaint, WingsContentColor,
+    WingsElevationLevel, WingsPaint, WingsShape,
 };
 
 use crate::button::WingsIconButton;
@@ -84,11 +84,29 @@ pub struct WingsTopAppBarProps {
     pub title: String,
     /// Optional leading navigation icon (menu, back arrow).
     pub navigation_icon: String,
+    /// How the title is shown (large or inline).
+    pub title_display: WingsTitleDisplay,
+}
+
+/// How a [`WingsTopAppBar`] shows its title, like SwiftUI's `navigationBarTitleDisplayMode`.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WingsTitleDisplay {
+    /// Large on root screens in iOS (no navigation icon), inline everywhere else.
+    #[default]
+    Automatic,
+    /// A large title below the toolbar that collapses to inline while content scrolls (iOS).
+    Large,
+    /// A small title inside the toolbar.
+    Inline,
 }
 
 /// Marks the leading navigation icon button of a top app bar.
 #[derive(Component, Debug, Default, Clone, Copy)]
 pub struct WingsTopAppBarNavigation;
+
+/// Marks the title of a top app bar.
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsTopAppBarTitle;
 
 impl WingsTopAppBar {
     fn scene(props: WingsTopAppBarProps) -> impl Scene {
@@ -101,6 +119,7 @@ impl WingsTopAppBar {
             )
         };
         let title = props.title;
+        let display = props.title_display;
         bsn! {
             Node {
                 height: px(64),
@@ -109,12 +128,17 @@ impl WingsTopAppBar {
                 column_gap: px(4),
                 align_items: AlignItems::Center,
             }
+            display
             WingsBackground({WingsPaint::Role(ColorRole::Surface)})
+            WingsBorderPaint
             WingsContentColor({WingsPaint::Role(ColorRole::OnSurface)})
             @{nav}
             Children [
                 @WingsText { @text: title, @role: TypeRole::TitleLarge }
                 Node { flex_grow: 1.0, margin: UiRect::horizontal(px(8)) }
+                TextLayout
+                WingsTopAppBarTitle
+                Pickable::IGNORE
             ]
         }
     }
@@ -152,6 +176,8 @@ impl WingsNavigationBar {
             responsive
             WingsNavigationContainer
             WingsElevationLevel(2)
+            WingsShape(ShapeRole::None)
+            WingsBorderPaint
             WingsBackground({WingsPaint::Role(ColorRole::SurfaceContainer)})
         }
     }
@@ -175,10 +201,21 @@ impl WingsNavigationRail {
             }
             responsive
             WingsNavigationContainer
+            WingsShape(ShapeRole::None)
+            WingsBorderPaint
+            WingsElevationLevel
             WingsBackground({WingsPaint::Role(ColorRole::Surface)})
         }
     }
 }
+
+/// The icon container ("pill") of a [`WingsNavigationItem`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsNavigationPill;
+
+/// The label of a [`WingsNavigationItem`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsNavigationLabel;
 
 /// A destination in a [`WingsNavigationBar`] or [`WingsNavigationRail`].
 #[derive(SceneComponent, Default, Clone)]
@@ -221,7 +258,12 @@ impl WingsNavigationItem {
             )),
             ..default()
         };
-        let icon = props.icon;
+        let icon_scene: Box<dyn Scene> = if props.icon.is_empty() {
+            Box::new(bsn! { Node })
+        } else {
+            let image = props.icon;
+            Box::new(bsn! { @WingsIcon { @image: image, @size: 24.0 } })
+        };
         let label = props.label;
         bsn! {
             Node {
@@ -235,6 +277,8 @@ impl WingsNavigationItem {
             TabIndex(0)
             EntityCursor::System(SystemCursorIcon::Pointer)
             WingsContentColor
+            WingsBackground
+            WingsShape(ShapeRole::Full)
             label_part
             on(navigation_item_activated)
             @{selected}
@@ -249,10 +293,12 @@ impl WingsNavigationItem {
                 WingsInteractive
                 WingsBackground
                 WingsContentColor
+                WingsNavigationPill
                 pill
-                Children [ @WingsIcon { @image: icon, @size: 24.0 } ]
+                Children [ @{icon_scene} ]
                 --
                 @WingsText { @text: label, @role: TypeRole::LabelMedium }
+                WingsNavigationLabel
             ]
         }
     }
@@ -299,7 +345,46 @@ pub fn navigation_item_activated(
     }
 }
 
-/// A clickable row with a headline, optional supporting text and optional leading icon.
+/// What a [`WingsListItem`] shows at its trailing edge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WingsListAccessory {
+    /// Nothing.
+    #[default]
+    None,
+    /// A disclosure chevron: the row opens another screen.
+    Chevron,
+    /// A checkmark: the row is the selected option.
+    Checkmark,
+}
+
+/// The headline of a [`WingsListItem`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsListItemHeadline;
+
+/// The supporting text of a [`WingsListItem`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsListItemSupporting;
+
+/// The trailing detail text of a [`WingsListItem`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsListItemDetail;
+
+/// The leading icon of a [`WingsListItem`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsListItemIcon;
+
+/// A clickable row with a headline, optional supporting text, an optional leading icon and an
+/// optional trailing detail and accessory.
+///
+/// ```ignore
+/// bsn! {
+///     @WingsListItem {
+///         @headline: "Wi-Fi",
+///         @detail: "Home",
+///         @accessory: WingsListAccessory::Chevron,
+///     }
+/// }
+/// ```
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WingsListItemProps)]
 pub struct WingsListItem;
@@ -313,6 +398,53 @@ pub struct WingsListItemProps {
     pub supporting: String,
     /// Leading icon asset path. Empty for none.
     pub icon: String,
+    /// Trailing value text, like the current setting. Empty for none.
+    pub detail: String,
+    /// Trailing accessory.
+    pub accessory: WingsListAccessory,
+}
+
+/// A small disclosure chevron (`>`), 7 by 12 pixels.
+pub(crate) fn chevron_scene(color: ColorRole) -> impl Scene {
+    let stroke = |top: f32, angle: f32| {
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(-0.5),
+            top: px(top),
+            width: px(8.5),
+            height: px(2),
+            border_radius: BorderRadius::all(px(1)),
+            ..default()
+        }
+        .clone()
+        .with_rotation(angle)
+    };
+    let (upper, upper_rot) = stroke(2.4, 45.0_f32.to_radians());
+    let (lower, lower_rot) = stroke(7.6, -45.0_f32.to_radians());
+    bsn! {
+        Node { width: px(7), height: px(12), flex_shrink: 0.0, margin: UiRect::left(px(4)) }
+        Pickable::IGNORE
+        Children [
+            upper
+            upper_rot
+            WingsBackground({WingsPaint::Role(color)})
+            --
+            lower
+            lower_rot
+            WingsBackground({WingsPaint::Role(color)})
+        ]
+    }
+}
+
+/// Pairs a node with a rotation transform.
+trait WithRotation {
+    fn with_rotation(self, angle: f32) -> (Node, UiTransform);
+}
+
+impl WithRotation for Node {
+    fn with_rotation(self, angle: f32) -> (Node, UiTransform) {
+        (self, UiTransform::from_rotation(Rot2::radians(angle)))
+    }
 }
 
 impl WingsListItem {
@@ -321,7 +453,9 @@ impl WingsListItem {
             Box::new(bsn! {})
         } else {
             let image = props.icon;
-            Box::new(bsn! { Children [ @WingsIcon { @image: image, @size: 24.0 } ] })
+            Box::new(bsn! {
+                Children [ @WingsIcon { @image: image, @size: 24.0 } WingsListItemIcon ]
+            })
         };
         let supporting: Box<dyn Scene> = if props.supporting.is_empty() {
             Box::new(bsn! {})
@@ -334,8 +468,33 @@ impl WingsListItem {
                         @role: TypeRole::BodyMedium,
                         @color: ColorRole::OnSurfaceVariant,
                     }
+                    WingsListItemSupporting
                 ]
             })
+        };
+        let detail: Box<dyn Scene> = if props.detail.is_empty() {
+            Box::new(bsn! {})
+        } else {
+            let text = props.detail;
+            Box::new(bsn! {
+                Children [
+                    @WingsText {
+                        @text: text,
+                        @role: TypeRole::BodyLarge,
+                        @color: ColorRole::OnSurfaceVariant,
+                    }
+                    WingsListItemDetail
+                ]
+            })
+        };
+        let accessory: Box<dyn Scene> = match props.accessory {
+            WingsListAccessory::None => Box::new(bsn! {}),
+            WingsListAccessory::Chevron => Box::new(bsn! {
+                Children [ @{chevron_scene(ColorRole::TertiaryLabel)} ]
+            }),
+            WingsListAccessory::Checkmark => Box::new(bsn! {
+                Children [ @{crate::selection::static_check_mark_scene(ColorRole::Primary)} ]
+            }),
         };
         let headline = props.headline;
         bsn! {
@@ -350,12 +509,18 @@ impl WingsListItem {
             TabIndex(0)
             EntityCursor::System(SystemCursorIcon::Pointer)
             WingsBackground
+            WingsBorderPaint
             @{icon}
             Children [
                 Node { flex_direction: FlexDirection::Column, flex_grow: 1.0 }
-                Children [ @WingsText { @text: headline, @role: TypeRole::BodyLarge } ]
+                Children [
+                    @WingsText { @text: headline, @role: TypeRole::BodyLarge }
+                    WingsListItemHeadline
+                ]
                 @{supporting}
             ]
+            @{detail}
+            @{accessory}
         }
     }
 }

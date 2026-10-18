@@ -10,9 +10,19 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+[features]
+## Embedded database source (redb).
+database = ["dep:redb"]
+## HTTP client for `HttpRemote` (ureq with rustls).
+http = ["dep:ureq"]
+
 [dependencies]
 bevy = { workspace = true, features = ["std"] }
-bevy_wings_domain = { workspace = true }
+bevy_wings_domain = { workspace = true, features = ["serde"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+redb = { workspace = true, optional = true }
+ureq = { workspace = true, optional = true }
 
 [lints]
 workspace = true

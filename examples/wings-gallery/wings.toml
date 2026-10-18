@@ -1,0 +1,24 @@
+# How the gallery picks its look.
+#
+# "system": the platform's own design. Material on Android and Linux, Fluent on Windows,
+#           Cupertino on iOS, iPadOS and macOS.
+# "custom": the design in [custom], identical on every platform.
+ui = "system"
+
+# "light", "dark" or "system".
+appearance = "light"
+
+# Brand color: the tint on Apple platforms and Windows, the palette seed for Material.
+# accent = "#4D5CEB"
+
+[custom]
+design = "material"
+# font_family = "Brand Sans"
+# radii = [0, 4, 8, 12, 16, 28]
+# spacing = [4, 8, 16, 24, 32]
+
+[custom.light]
+# primary = "#4D5CEB"
+
+[custom.dark]
+# primary = "#9AA8FF"

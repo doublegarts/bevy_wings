@@ -21,7 +21,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.97.1"
 license = "MIT"
@@ -33,19 +33,24 @@ categories = ["game-development", "gui"]
 [workspace.dependencies]
 bevy = { version = "0.20.0", default-features = false }
 naga = { version = "30.0.1", features = ["wgsl-in"] }
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.8"
+serde_json = "1.0.154"
+redb = "4.4.0"
+ureq = "3.4.2"
 
-bevy_wings_ui_core = { path = "crates/presentation/bevy_wings_ui_core", version = "0.1.0" }
-bevy_wings_ui_animation = { path = "crates/presentation/bevy_wings_ui_animation", version = "0.1.0" }
-bevy_wings_ui_theme = { path = "crates/presentation/bevy_wings_ui_theme", version = "0.1.0" }
-bevy_wings_ui_responsive = { path = "crates/presentation/bevy_wings_ui_responsive", version = "0.1.0" }
-bevy_wings_ui_modifiers = { path = "crates/presentation/bevy_wings_ui_modifiers", version = "0.1.0" }
-bevy_wings_ui_shaders = { path = "crates/presentation/bevy_wings_ui_shaders", version = "0.1.0" }
-bevy_wings_ui_widgets = { path = "crates/presentation/bevy_wings_ui_widgets", version = "0.1.0", default-features = false }
-bevy_wings_di = { path = "crates/shared/bevy_wings_di", version = "0.1.0" }
-bevy_wings_domain = { path = "crates/domain/bevy_wings_domain", version = "0.1.0" }
-bevy_wings_data = { path = "crates/data/bevy_wings_data", version = "0.1.0" }
-bevy_wings_ui_mvvm = { path = "crates/presentation/bevy_wings_ui_mvvm", version = "0.1.0" }
-bevy_wings_ui_navigation = { path = "crates/presentation/bevy_wings_ui_navigation", version = "0.1.0" }
+bevy_wings_ui_core = { path = "crates/presentation/bevy_wings_ui_core", version = "0.2.0" }
+bevy_wings_ui_animation = { path = "crates/presentation/bevy_wings_ui_animation", version = "0.2.0" }
+bevy_wings_ui_theme = { path = "crates/presentation/bevy_wings_ui_theme", version = "0.2.0" }
+bevy_wings_ui_responsive = { path = "crates/presentation/bevy_wings_ui_responsive", version = "0.2.0" }
+bevy_wings_ui_modifiers = { path = "crates/presentation/bevy_wings_ui_modifiers", version = "0.2.0" }
+bevy_wings_ui_shaders = { path = "crates/presentation/bevy_wings_ui_shaders", version = "0.2.0" }
+bevy_wings_ui_widgets = { path = "crates/presentation/bevy_wings_ui_widgets", version = "0.2.0", default-features = false }
+bevy_wings_di = { path = "crates/shared/bevy_wings_di", version = "0.2.0" }
+bevy_wings_domain = { path = "crates/domain/bevy_wings_domain", version = "0.2.0" }
+bevy_wings_data = { path = "crates/data/bevy_wings_data", version = "0.2.0" }
+bevy_wings_ui_mvvm = { path = "crates/presentation/bevy_wings_ui_mvvm", version = "0.2.0" }
+bevy_wings_ui_navigation = { path = "crates/presentation/bevy_wings_ui_navigation", version = "0.2.0" }
 
 [workspace.lints.rust]
 missing_docs = "warn"
@@ -74,9 +79,15 @@ name = "bevy_wings"
 path = "src/lib.rs"
 
 [features]
-default = ["shaders"]
+default = ["shaders", "native"]
+## Reads safe areas from the platform (iOS, Android, macOS title bars).
+native = ["bevy_wings_ui_responsive/native"]
 ## Custom UI shaders (requires the Bevy render stack).
 shaders = ["dep:bevy_wings_ui_shaders", "bevy_wings_ui_widgets/shaders"]
+## Embedded database data source (redb).
+database = ["bevy_wings_data/database"]
+## HTTP remote data source (ureq).
+http = ["bevy_wings_data/http"]
 
 [dependencies]
 bevy = { workspace = true, features = ["std", "bevy_ui", "bevy_scene"] }

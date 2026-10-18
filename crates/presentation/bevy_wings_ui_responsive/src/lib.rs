@@ -31,6 +31,15 @@ use bevy::window::{PrimaryWindow, Window};
 
 use bevy_wings_ui_core::{WingsUiSystems, ensure_core};
 
+pub mod direction;
+pub mod safe_area;
+
+pub use direction::{WingsLayoutDirection, WingsNoMirror};
+pub use safe_area::{
+    WingsDevicePreview, WingsDeviceProfile, WingsEdges, WingsInsets, WingsSafeArea,
+    WingsSafeAreaPadding, WingsScreenKind,
+};
+
 /// Width based size class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Reflect)]
 pub enum WidthClass {
@@ -475,16 +484,24 @@ impl Plugin for WingsResponsivePlugin {
         app.insert_resource(self.breakpoints.unwrap_or_default())
             .init_resource::<WingsViewport>()
             .init_resource::<UiScale>()
+            .init_resource::<WingsSafeArea>()
+            .init_resource::<WingsLayoutDirection>()
             .add_message::<WidthClassChanged>()
             .add_systems(
                 Update,
                 (
+                    safe_area::apply_device_preview,
+                    #[cfg(feature = "native")]
+                    safe_area::read_native_safe_area,
                     update_viewport,
                     (
                         apply_responsive_nodes,
                         apply_responsive_visibility,
                         apply_responsive_columns,
                         apply_auto_scale,
+                        safe_area::apply_safe_area_padding,
+                        safe_area::draw_device_preview,
+                        direction::apply_layout_direction,
                     ),
                 )
                     .chain()
@@ -500,6 +517,11 @@ pub fn width_at_least(class: WidthClass) -> impl Fn(Res<WingsViewport>) -> bool 
 
 /// Commonly used items.
 pub mod prelude {
+    pub use crate::direction::{WingsLayoutDirection, WingsNoMirror};
+    pub use crate::safe_area::{
+        WingsDevicePreview, WingsDeviceProfile, WingsEdges, WingsInsets, WingsSafeArea,
+        WingsSafeAreaPadding, WingsScreenKind,
+    };
     pub use crate::{
         HeightClass, NodePatch, Orientation, WidthClass, WidthClassChanged, WingsAutoScale,
         WingsBreakpoints, WingsResponsive, WingsResponsiveAppExt, WingsResponsiveColumns,

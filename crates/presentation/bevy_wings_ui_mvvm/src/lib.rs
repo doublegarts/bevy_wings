@@ -36,6 +36,8 @@
 //! });
 //! ```
 
+pub mod loadable;
+
 use core::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 
@@ -514,6 +516,9 @@ impl WingsMvvmAppExt for App {
 
 /// Commonly used items.
 pub mod prelude {
+    pub use crate::loadable::{
+        WingsLoadPhase, bind_error_text, bind_failed, bind_loaded, bind_loading, bind_refreshing,
+    };
     pub use crate::{
         WingsBind, WingsBindChecked, WingsBindEnabled, WingsBindText, WingsBindVisible,
         WingsEffects, WingsHasEffects, WingsMvvmAppExt, WingsProvideViewModel, WingsViewModel,

@@ -14,6 +14,7 @@ categories.workspace = true
 bevy = { workspace = true, features = ["std", "bevy_ui", "bevy_text", "bevy_ui_widgets", "bevy_scene", "bevy_asset"] }
 bevy_wings_ui_core = { workspace = true }
 bevy_wings_di = { workspace = true }
+bevy_wings_domain = { workspace = true }
 
 [lints]
 workspace = true

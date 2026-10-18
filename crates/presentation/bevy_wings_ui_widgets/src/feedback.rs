@@ -10,11 +10,12 @@ use bevy_wings_ui_animation::prelude::{
 };
 use bevy_wings_ui_core::WingsOpacity;
 use bevy_wings_ui_theme::prelude::{
-    ColorRole, ShapeRole, TypeRole, WingsBackground, WingsContentColor, WingsElevationLevel,
-    WingsPaint, WingsShape,
+    ColorRole, ShapeRole, TypeRole, WingsBackground, WingsBorderPaint, WingsContentColor,
+    WingsDesign, WingsElevationLevel, WingsPaint, WingsShape,
 };
 
-use crate::button::{WingsButton, WingsButtonVariant};
+use crate::button::{WingsButton, WingsButtonOverride, WingsButtonPalette, WingsButtonVariant};
+use crate::skin::WingsSkin;
 use crate::text::WingsText;
 
 // ---------------------------------------------------------------------------------------------
@@ -225,7 +226,14 @@ pub fn circular_progress_system(
     mut commands: Commands,
     theme: Res<bevy_wings_ui_theme::prelude::WingsTheme>,
     materials: Option<ResMut<Assets<bevy_wings_ui_shaders::WingsCircularProgressMaterial>>>,
-    added: Query<(Entity, &WingsProgress), Added<WingsCircularProgress>>,
+    added: Query<
+        (Entity, &WingsProgress),
+        (
+            With<WingsCircularProgress>,
+            Without<MaterialNode<bevy_wings_ui_shaders::WingsCircularProgressMaterial>>,
+            Without<crate::feedback_skin::WingsSpinner>,
+        ),
+    >,
     changed: Query<
         (
             &WingsProgress,
@@ -308,11 +316,15 @@ impl WingsSkeleton {
     }
 }
 
-/// Starts the skeleton effect on new skeletons and keeps shimmer colors on theme. Falls back to
-/// an opacity pulse when shader materials are unavailable (headless apps, `shaders` disabled).
+/// Starts the skeleton effect on new skeletons and after design changes, and keeps shimmer
+/// colors on theme. Material and Fluent shimmer (with the `shaders` feature); the Apple designs
+/// pulse a gray placeholder like SwiftUI's `.redacted(reason: .placeholder)`. Without shader
+/// materials (headless apps, `shaders` disabled) every design pulses.
 pub fn skeleton_system(
     mut commands: Commands,
+    skin: Res<WingsSkin>,
     added: Query<Entity, Added<WingsSkeleton>>,
+    every: Query<Entity, With<WingsSkeleton>>,
     #[cfg(feature = "shaders")] theme: Res<bevy_wings_ui_theme::prelude::WingsTheme>,
     #[cfg(feature = "shaders")] materials: Option<
         ResMut<Assets<bevy_wings_ui_shaders::WingsShimmerMaterial>>,
@@ -321,32 +333,48 @@ pub fn skeleton_system(
         &MaterialNode<bevy_wings_ui_shaders::WingsShimmerMaterial>,
     >,
 ) {
+    let targets = crate::skin::skin_targets(&skin, added, every);
     #[cfg(feature = "shaders")]
     if let Some(mut materials) = materials {
         let base = theme.color(ColorRole::SurfaceContainerHighest);
         let highlight = theme.color(ColorRole::SurfaceContainerLow);
-        for entity in &added {
-            let m = bevy_wings_ui_shaders::WingsShimmerMaterial::new(base, highlight);
-            commands
-                .entity(entity)
-                .insert(MaterialNode(materials.add(m)));
-        }
-        if theme.is_changed() {
-            for handle in &all {
-                if let Some(mut m) = materials.get_mut(&handle.0) {
-                    m.base = base.into();
-                    m.highlight = highlight.into();
+        if !skin.apple() {
+            for entity in targets {
+                let m = bevy_wings_ui_shaders::WingsShimmerMaterial::new(base, highlight);
+                commands
+                    .entity(entity)
+                    .stop_animation::<OpacityProperty>()
+                    .insert((
+                        WingsOpacity(1.0),
+                        WingsBackground(WingsPaint::Transparent),
+                        MaterialNode(materials.add(m)),
+                    ));
+            }
+            if theme.is_changed() {
+                for handle in &all {
+                    if let Some(mut m) = materials.get_mut(&handle.0) {
+                        m.base = base.into();
+                        m.highlight = highlight.into();
+                    }
                 }
             }
+            return;
         }
-        return;
+        for entity in &targets {
+            commands
+                .entity(*entity)
+                .remove::<MaterialNode<bevy_wings_ui_shaders::WingsShimmerMaterial>>();
+        }
     }
-    for entity in &added {
+    let fill = if skin.apple() {
+        ColorRole::Fill
+    } else {
+        ColorRole::SurfaceContainerHighest
+    };
+    for entity in targets {
         commands
             .entity(entity)
-            .insert(WingsBackground(WingsPaint::Role(
-                ColorRole::SurfaceContainerHighest,
-            )))
+            .insert(WingsBackground(WingsPaint::Role(fill)))
             .animate_from_to::<OpacityProperty>(
                 1.0,
                 0.45,
@@ -500,17 +528,32 @@ pub struct WingsSnackbar {
     pub exiting: Option<f32>,
 }
 
-fn snackbar_scene(msg: &WingsShowSnackbar) -> impl Scene + use<> {
+fn snackbar_scene(msg: &WingsShowSnackbar, design: WingsDesign) -> impl Scene + use<> {
     let text = msg.text.clone();
+    let apple = design.is_apple();
+    let action_color = match design {
+        WingsDesign::Material => ColorRole::InversePrimary,
+        _ => ColorRole::Primary,
+    };
     let action: Box<dyn Scene> = match &msg.action {
         None => Box::new(bsn! {}),
         Some(label) => {
             let label = label.clone();
             let action_label = label.clone();
+            let action_override = WingsButtonOverride {
+                palette: Some(WingsButtonPalette {
+                    container: WingsPaint::Transparent,
+                    content: action_color,
+                    border: WingsPaint::Transparent,
+                    elevation: 0,
+                }),
+                min_height: None,
+                grow: false,
+            };
             Box::new(bsn! {
                 Children [
                     @WingsButton { @text: label, @variant: WingsButtonVariant::Text }
-                    WingsContentColor({WingsPaint::Role(ColorRole::InversePrimary)})
+                    action_override
                     on(move |ev: On<Activate>, parents: Query<&ChildOf>, mut commands: Commands| {
                         if let Ok(parent) = parents.get(ev.event_target()) {
                             commands.trigger(WingsSnackbarAction {
@@ -532,22 +575,74 @@ fn snackbar_scene(msg: &WingsShowSnackbar) -> impl Scene + use<> {
         enter: WingsTransition::slide_vertically(24.0).and(WingsTransition::fade()),
         exit: WingsTransition::fade(),
     };
+    // Material: inverse surface bar. Apple: a floating capsule toast. Fluent: an info bar.
+    let (shape, container, content, border, min_width, height, pad) = match design {
+        WingsDesign::Material => (
+            ShapeRole::ExtraSmall,
+            ColorRole::InverseSurface,
+            ColorRole::InverseOnSurface,
+            WingsPaint::Transparent,
+            288.0,
+            48.0,
+            16.0,
+        ),
+        WingsDesign::Fluent => (
+            ShapeRole::Large,
+            ColorRole::SurfaceContainerHigh,
+            ColorRole::OnSurface,
+            WingsPaint::Role(ColorRole::OutlineVariant),
+            320.0,
+            48.0,
+            16.0,
+        ),
+        _ => (
+            ShapeRole::Full,
+            ColorRole::SurfaceContainerLowest,
+            ColorRole::OnSurface,
+            WingsPaint::Role(ColorRole::OutlineVariant),
+            200.0,
+            if design == WingsDesign::MacOs {
+                36.0
+            } else {
+                48.0
+            },
+            20.0,
+        ),
+    };
+    let node = Node {
+        min_width: px(min_width),
+        max_width: px(560),
+        min_height: px(height),
+        padding: UiRect::axes(px(pad), px(4)),
+        column_gap: px(8),
+        border: UiRect::all(px(if border == WingsPaint::Transparent {
+            0.0
+        } else {
+            1.0
+        })),
+        align_items: AlignItems::Center,
+        justify_content: if apple {
+            JustifyContent::Center
+        } else {
+            JustifyContent::SpaceBetween
+        },
+        ..default()
+    };
+    let glass: Box<dyn Scene> = if apple {
+        Box::new(bsn! { crate::glass::WingsGlass })
+    } else {
+        Box::new(bsn! {})
+    };
     bsn! {
-        Node {
-            min_width: px(288),
-            max_width: px(560),
-            min_height: px(48),
-            padding: UiRect::axes(px(16), px(4)),
-            column_gap: px(8),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::SpaceBetween,
-        }
+        node
         snackbar
         visibility
-        WingsShape(ShapeRole::ExtraSmall)
+        @{glass}
+        WingsShape(shape)
         WingsElevationLevel(3)
-        WingsBackground({WingsPaint::Role(ColorRole::InverseSurface)})
-        WingsContentColor({WingsPaint::Role(ColorRole::InverseOnSurface)})
+        WingsBackground({WingsPaint::Role(container)})
+        WingsBorderPaint({border})
+        WingsContentColor({WingsPaint::Role(content)})
         Children [ @WingsText { @text: text, @role: TypeRole::BodyMedium } ]
         @{action}
     }
@@ -557,6 +652,7 @@ fn snackbar_scene(msg: &WingsShowSnackbar) -> impl Scene + use<> {
 /// replaces the visible one.
 pub fn show_snackbars(
     mut commands: Commands,
+    skin: Res<WingsSkin>,
     mut messages: MessageReader<WingsShowSnackbar>,
     hosts: Query<(Entity, Option<&Children>), With<WingsSnackbarHost>>,
     mut visible: Query<(&mut WingsSnackbar, &mut WingsAnimatedVisibility)>,
@@ -572,7 +668,7 @@ pub fn show_snackbars(
                 vis.visible = false;
             }
         }
-        commands.spawn_scene(bsn! { @{snackbar_scene(msg)} ChildOf(host) });
+        commands.spawn_scene(bsn! { @{snackbar_scene(msg, skin.design)} ChildOf(host) });
     }
 }
 
@@ -635,6 +731,8 @@ pub struct WingsDialogProps {
     pub dismiss: String,
     /// Start visible.
     pub open: bool,
+    /// The confirm action destroys something (drawn in the error color).
+    pub destructive: bool,
 }
 
 impl Default for WingsDialogProps {
@@ -645,6 +743,7 @@ impl Default for WingsDialogProps {
             confirm: "OK".into(),
             dismiss: "Cancel".into(),
             open: false,
+            destructive: false,
         }
     }
 }
@@ -663,7 +762,25 @@ pub struct WingsDialogResult {
 pub struct WingsDialogButton {
     /// `true` for the confirm button.
     pub confirm: bool,
+    /// `true` when confirming destroys something (drawn in the error color).
+    pub destructive: bool,
 }
+
+/// The surface (panel) of a [`WingsDialog`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsDialogSurface;
+
+/// The title of a [`WingsDialog`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsDialogTitle;
+
+/// The message of a [`WingsDialog`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsDialogMessage;
+
+/// The button row of a [`WingsDialog`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsDialogActions;
 
 /// Observer: forwards dialog button clicks as [`WingsDialogResult`] and closes the dialog.
 pub fn dialog_button_clicked(
@@ -700,7 +817,7 @@ impl WingsDialog {
             Box::new(bsn! {
                 Children [
                     @WingsButton { @text: label, @variant: WingsButtonVariant::Text }
-                    WingsDialogButton { confirm: false }
+                    WingsDialogButton { confirm: false, destructive: false }
                     on(dialog_button_clicked)
                 ]
             })
@@ -709,6 +826,10 @@ impl WingsDialog {
             visible: props.open,
             enter: WingsTransition::fade(),
             exit: WingsTransition::fade(),
+        };
+        let confirm_button = WingsDialogButton {
+            confirm: true,
+            destructive: props.destructive,
         };
         let surface_motion = WingsAnimatedVisibility {
             visible: true,
@@ -727,6 +848,7 @@ impl WingsDialog {
             }
             visibility
             GlobalZIndex(100)
+            bevy_wings_ui_responsive::WingsSafeAreaPadding
             WingsBackground({WingsPaint::Role(ColorRole::Scrim).with_alpha(0.32)})
             Children [
                 Node {
@@ -737,20 +859,27 @@ impl WingsDialog {
                     flex_direction: FlexDirection::Column,
                 }
                 surface_motion
+                WingsDialogSurface
                 WingsShape(ShapeRole::ExtraLarge)
                 WingsElevationLevel(3)
                 WingsBackground({WingsPaint::Role(ColorRole::SurfaceContainerHigh)})
+                WingsBorderPaint
                 WingsContentColor({WingsPaint::Role(ColorRole::OnSurface)})
                 Children [
                     @WingsText { @text: title, @role: TypeRole::HeadlineSmall }
+                    WingsDialogTitle
+                    TextLayout
                     --
                     @WingsText { @text: text, @role: TypeRole::BodyMedium, @color: ColorRole::OnSurfaceVariant }
+                    WingsDialogMessage
+                    TextLayout
                     --
                     Node { justify_content: JustifyContent::End, column_gap: px(8) }
+                    WingsDialogActions
                     @{dismiss}
                     Children [
                         @WingsButton { @text: confirm, @variant: WingsButtonVariant::Text }
-                        WingsDialogButton { confirm: true }
+                        confirm_button
                         on(dialog_button_clicked)
                     ]
                 ]

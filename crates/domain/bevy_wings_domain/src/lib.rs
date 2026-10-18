@@ -13,6 +13,10 @@
 //! | [`ReadRepository`] and [`WriteRepository`] | Contracts the data layer implements |
 //! | [`PageRequest`] and [`Page`] | Paging |
 //! | [`Loadable<T>`] | Loading state for the presentation layer (idle, loading, ready, failed) |
+//! | [`UseCaseExt`] | Pipelines: [`retry`](UseCaseExt::retry), [`timeout`](UseCaseExt::timeout), [`logged`](UseCaseExt::logged) and [`map`](UseCaseExt::map) decorators |
+//!
+//! With the `serde` feature, [`Id`], [`PageRequest`] and [`Page`] serialize, so entities that
+//! contain them can be persisted.
 //!
 //! Dependencies point inwards: the data layer implements the repository traits defined here,
 //! and the presentation layer calls use cases and renders [`Loadable`] values.
@@ -40,6 +44,7 @@ mod entity;
 mod error;
 mod loadable;
 mod page;
+mod pipeline;
 mod repository;
 mod use_case;
 mod validation;
@@ -48,6 +53,7 @@ pub use entity::{DomainEntity, Id};
 pub use error::{DomainError, DomainResult, FieldError};
 pub use loadable::Loadable;
 pub use page::{Page, PageRequest};
+pub use pipeline::{Logged, Mapped, RetryPolicy, Retrying, Timeout, UseCaseEvent, UseCaseExt};
 pub use repository::{ReadRepository, WriteRepository};
 pub use use_case::{FnUseCase, UseCase, use_case};
 pub use validation::{Validator, rules};
@@ -56,6 +62,7 @@ pub use validation::{Validator, rules};
 pub mod prelude {
     pub use crate::{
         DomainEntity, DomainError, DomainResult, FieldError, FnUseCase, Id, Loadable, Page,
-        PageRequest, ReadRepository, UseCase, Validator, WriteRepository, rules, use_case,
+        PageRequest, ReadRepository, RetryPolicy, UseCase, UseCaseEvent, UseCaseExt, Validator,
+        WriteRepository, rules, use_case,
     };
 }

@@ -30,7 +30,7 @@ use bevy_wings_ui_animation::prelude::{
 };
 use bevy_wings_ui_theme::prelude::{
     ColorRole, ShapeRole, TypeRole, WingsBackground, WingsBorderPaint, WingsContentColor,
-    WingsPaint, WingsShape,
+    WingsElevationLevel, WingsPaint, WingsShape,
 };
 
 use crate::button::disabled_scene;
@@ -40,6 +40,45 @@ use crate::text::WingsText;
 /// Marks an entity whose [`Checked`] state drives [`WingsCheckedPart`]s in its subtree.
 #[derive(Component, Debug, Default, Clone, Copy)]
 pub struct WingsCheckedOwner;
+
+/// Asks [`checked_parts_system`] to re-apply the parts of an owner immediately (without
+/// animation), for example after a skin replaced them. Removed once applied.
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsCheckedRefresh;
+
+/// The box of a [`WingsCheckbox`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsCheckboxBox;
+
+/// The track of a [`WingsSwitch`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsSwitchTrack;
+
+/// The thumb of a [`WingsSwitch`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsSwitchThumb;
+
+/// The ring of a [`WingsRadioButton`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsRadioRing;
+
+/// The dot of a [`WingsRadioButton`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsRadioDot;
+
+/// The track of a [`WingsSlider`].
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsSliderTrack;
+
+/// Thumb size of a [`WingsSlider`] in the active design.
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub struct WingsSliderThumbSize(pub Vec2);
+
+impl Default for WingsSliderThumbSize {
+    fn default() -> Self {
+        Self(Vec2::splat(SLIDER_THUMB))
+    }
+}
 
 /// Describes how an entity looks in the checked and unchecked state of its closest
 /// [`WingsCheckedOwner`]. Every field is optional; `None` leaves that aspect untouched.
@@ -153,7 +192,7 @@ pub(crate) fn draw_checkmarks(
 /// spawned, in which case transforms snap instead of animating).
 pub fn checked_parts_system(
     mut commands: Commands,
-    added_owner: Query<Entity, Added<WingsCheckedOwner>>,
+    added_owner: Query<Entity, Or<(Added<WingsCheckedOwner>, Added<WingsCheckedRefresh>)>>,
     added_checked: Query<Entity, (With<WingsCheckedOwner>, Added<Checked>)>,
     mut removed_checked: RemovedComponents<Checked>,
     owners: Query<Has<Checked>, With<WingsCheckedOwner>>,
@@ -169,6 +208,9 @@ pub fn checked_parts_system(
     )>,
 ) {
     let fresh: Vec<Entity> = added_owner.iter().collect();
+    for e in &fresh {
+        commands.entity(*e).remove::<WingsCheckedRefresh>();
+    }
     let toggled = added_checked
         .iter()
         .chain(removed_checked.read())
@@ -241,6 +283,67 @@ pub fn checked_parts_system(
                 }
             }
         }
+    }
+}
+
+/// A 14 by 14 check mark drawn with two strokes in `color`. With `animated` it reveals itself
+/// when its [`WingsCheckedOwner`] gets checked (it must then live below one).
+pub(crate) fn check_mark_scene(color: ColorRole) -> impl Scene {
+    bsn! {
+        Node { width: px(14), height: px(14), flex_shrink: 0.0 }
+        WingsCheckMarkProgress
+        WingsCheckedPart
+        Children [
+            Node {
+                position_type: PositionType::Absolute,
+                width: px(0),
+                height: px(2),
+                border_radius: BorderRadius::all(px(1)),
+            }
+            UiTransform
+            WingsBackground({WingsPaint::Role(color)})
+            CheckMarkStroke(0)
+            --
+            Node {
+                position_type: PositionType::Absolute,
+                width: px(0),
+                height: px(2),
+                border_radius: BorderRadius::all(px(1)),
+            }
+            UiTransform
+            WingsBackground({WingsPaint::Role(color)})
+            CheckMarkStroke(1)
+        ]
+    }
+}
+
+/// A fully drawn 14 by 14 check mark that does not react to any checked state.
+pub(crate) fn static_check_mark_scene(color: ColorRole) -> impl Scene {
+    bsn! {
+        Node { width: px(14), height: px(14), flex_shrink: 0.0 }
+        WingsCheckMarkProgress(1.0)
+        Pickable::IGNORE
+        Children [
+            Node {
+                position_type: PositionType::Absolute,
+                width: px(0),
+                height: px(2),
+                border_radius: BorderRadius::all(px(1)),
+            }
+            UiTransform
+            WingsBackground({WingsPaint::Role(color)})
+            CheckMarkStroke(0)
+            --
+            Node {
+                position_type: PositionType::Absolute,
+                width: px(0),
+                height: px(2),
+                border_radius: BorderRadius::all(px(1)),
+            }
+            UiTransform
+            WingsBackground({WingsPaint::Role(color)})
+            CheckMarkStroke(1)
+        ]
     }
 }
 
@@ -342,6 +445,7 @@ impl WingsCheckbox {
                 WingsShape(ShapeRole::ExtraSmall)
                 WingsBackground
                 WingsBorderPaint
+                WingsCheckboxBox
                 box_part
                 Children [
                     Node { width: px(14), height: px(14) }
@@ -418,12 +522,15 @@ impl WingsSwitch {
                 WingsShape(ShapeRole::Full)
                 WingsBackground
                 WingsBorderPaint
+                WingsSwitchTrack
                 track_part
                 Children [
                     Node { width: px(24), height: px(24) }
                     WingsShape(ShapeRole::Full)
                     WingsBackground
+                    WingsElevationLevel
                     UiTransform
+                    WingsSwitchThumb
                     thumb_part
                 ]
             ]
@@ -511,13 +618,16 @@ impl WingsRadioButton {
                     align_items: AlignItems::Center,
                 }
                 WingsShape(ShapeRole::Full)
+                WingsBackground
                 WingsBorderPaint
+                WingsRadioRing
                 ring_part
                 Children [
                     Node { width: px(10), height: px(10) }
                     WingsShape(ShapeRole::Full)
                     WingsBackground({WingsPaint::Role(ColorRole::Primary)})
                     UiTransform
+                    WingsRadioDot
                     dot_part
                 ]
             ]
@@ -581,6 +691,7 @@ impl WingsSlider {
             Slider { track_click: TrackClick::Snap }
             range
             value
+            WingsSliderThumbSize
             WingsInteractive
             TabIndex(0)
             EntityCursor::System(SystemCursorIcon::Pointer)
@@ -595,6 +706,7 @@ impl WingsSlider {
                     }
                     WingsShape(ShapeRole::Full)
                     WingsBackground({WingsPaint::Role(ColorRole::SurfaceContainerHighest)})
+                    WingsSliderTrack
                     Children [
                         Node { height: percent(100) }
                         WingsSliderFill
@@ -610,6 +722,8 @@ impl WingsSlider {
                 SliderThumb
                 WingsShape(ShapeRole::Full)
                 WingsBackground({WingsPaint::Role(ColorRole::Primary)})
+                WingsBorderPaint
+                WingsElevationLevel
             ]
         }
     }
@@ -627,22 +741,26 @@ pub fn slider_fraction(range: &SliderRange, value: f32) -> f32 {
 /// Positions the thumb and the fill of sliders whose value or range changed.
 pub fn slider_layout_system(
     sliders: Query<
-        (Entity, &SliderValue, &SliderRange),
+        (Entity, &SliderValue, &SliderRange, &WingsSliderThumbSize),
         (
             With<WingsSlider>,
-            Or<(Changed<SliderValue>, Changed<SliderRange>)>,
+            Or<(
+                Changed<SliderValue>,
+                Changed<SliderRange>,
+                Changed<WingsSliderThumbSize>,
+            )>,
         ),
     >,
     children: Query<&Children>,
     mut thumbs: Query<&mut Node, (With<SliderThumb>, Without<WingsSliderFill>)>,
     mut fills: Query<&mut Node, (With<WingsSliderFill>, Without<SliderThumb>)>,
 ) {
-    for (slider, value, range) in &sliders {
+    for (slider, value, range, thumb) in &sliders {
         let t = slider_fraction(range, value.0);
         for d in children.iter_descendants(slider) {
             if let Ok(mut node) = thumbs.get_mut(d) {
                 node.left = percent(t * 100.0);
-                node.margin.left = px(-t * SLIDER_THUMB);
+                node.margin.left = px(-t * thumb.0.x);
             } else if let Ok(mut node) = fills.get_mut(d) {
                 node.width = percent(t * 100.0);
             }

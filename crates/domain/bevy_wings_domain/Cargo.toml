@@ -10,7 +10,12 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+[features]
+## Serialize ids, pages, loadables and errors with serde.
+serde = ["dep:serde"]
+
 [dependencies]
+serde = { workspace = true, optional = true }
 
 [lints]
 workspace = true

@@ -18,9 +18,11 @@ use bevy::prelude::*;
 use bevy::ui_widgets::ScrollArea;
 
 use bevy_wings_ui_theme::prelude::{
-    ColorRole, ShapeRole, WingsBackground, WingsBorderPaint, WingsContentColor,
+    ColorRole, ShapeRole, WingsBackground, WingsBorderPaint, WingsContentColor, WingsDesign,
     WingsElevationLevel, WingsPaint, WingsShape,
 };
+
+use crate::skin::{WingsSkin, skin_targets};
 
 /// Props shared by [`WingsColumn`], [`WingsRow`] and [`WingsBox`].
 #[derive(Clone)]
@@ -211,10 +213,28 @@ impl WingsDivider {
     }
 }
 
-/// Vertically scrolling column (mouse wheel and touchpad).
+/// Vertically scrolling column (mouse wheel and touchpad). Its children keep their size
+/// instead of shrinking to fit, so long content scrolls.
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WingsStackProps)]
 pub struct WingsScrollColumn;
+
+/// Keeps the children of scroll columns from shrinking (flexbox would squeeze fixed height
+/// children such as progress bars to nothing once the content overflows).
+pub fn scroll_children_keep_size(
+    columns: Query<&Children, (With<WingsScrollColumn>, Changed<Children>)>,
+    mut nodes: Query<&mut Node, Without<WingsScrollColumn>>,
+) {
+    for children in &columns {
+        for child in children.iter() {
+            if let Ok(mut node) = nodes.get_mut(child)
+                && node.flex_shrink != 0.0
+            {
+                node.flex_shrink = 0.0;
+            }
+        }
+    }
+}
 
 impl WingsScrollColumn {
     fn scene(props: WingsStackProps) -> impl Scene {
@@ -329,8 +349,8 @@ impl WingsSurface {
     }
 }
 
-/// Card style.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Card style. Also the component the card skin uses to find cards.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WingsCardStyle {
     /// Raised card on the low surface container.
     #[default]
@@ -369,19 +389,84 @@ impl Default for WingsCardProps {
 
 impl WingsCard {
     fn scene(props: WingsCardProps) -> impl Scene {
-        let (color, elevation, outlined) = match props.style {
-            WingsCardStyle::Elevated => (ColorRole::SurfaceContainerLow, 1, false),
-            WingsCardStyle::Filled => (ColorRole::SurfaceContainerHighest, 0, false),
-            WingsCardStyle::Outlined => (ColorRole::Surface, 0, true),
-        };
-        WingsSurfaceProps {
-            color,
-            shape: ShapeRole::Medium,
-            elevation,
-            padding: props.padding,
-            gap: props.gap,
-            outlined,
+        let style = props.style;
+        let surface = card_surface(WingsDesign::Material, style, props.padding, props.gap);
+        bsn! { @{surface.into_scene()} style }
+    }
+}
+
+/// Surface of a card style in a design.
+fn card_surface(
+    design: WingsDesign,
+    style: WingsCardStyle,
+    padding: f32,
+    gap: f32,
+) -> WingsSurfaceProps {
+    use ColorRole::*;
+    let (color, shape, elevation, outlined) = match (design, style) {
+        (WingsDesign::Material, WingsCardStyle::Elevated) => {
+            (SurfaceContainerLow, ShapeRole::Medium, 1, false)
         }
-        .into_scene()
+        (WingsDesign::Material, WingsCardStyle::Filled) => {
+            (SurfaceContainerHighest, ShapeRole::Medium, 0, false)
+        }
+        (WingsDesign::Material, WingsCardStyle::Outlined) => (Surface, ShapeRole::Medium, 0, true),
+        (WingsDesign::Fluent, WingsCardStyle::Elevated) => {
+            (SecondaryGroupedBackground, ShapeRole::Large, 1, true)
+        }
+        (WingsDesign::Fluent, WingsCardStyle::Filled) => {
+            (SurfaceContainer, ShapeRole::Large, 0, false)
+        }
+        (WingsDesign::Fluent, WingsCardStyle::Outlined) => {
+            (SecondaryGroupedBackground, ShapeRole::Large, 0, true)
+        }
+        (_, WingsCardStyle::Elevated) => (SurfaceContainerLowest, ShapeRole::Large, 2, false),
+        (_, WingsCardStyle::Filled) => (SurfaceVariant, ShapeRole::Large, 0, false),
+        (_, WingsCardStyle::Outlined) => (Surface, ShapeRole::Large, 0, true),
+    };
+    WingsSurfaceProps {
+        color,
+        shape,
+        elevation,
+        padding,
+        gap,
+        outlined,
+    }
+}
+
+/// Skins cards: fill, corners, outline and shadow of each card style per design.
+pub fn skin_cards(
+    skin: Res<WingsSkin>,
+    added: Query<Entity, Added<WingsCardStyle>>,
+    all: Query<Entity, With<WingsCardStyle>>,
+    mut cards: Query<(
+        &WingsCardStyle,
+        &mut Node,
+        &mut WingsBackground,
+        &mut WingsContentColor,
+        &mut WingsBorderPaint,
+        &mut WingsShape,
+        &mut WingsElevationLevel,
+    )>,
+) {
+    for entity in skin_targets(&skin, added, all) {
+        let Ok((style, mut node, mut bg, mut content, mut border, mut shape, mut elevation)) =
+            cards.get_mut(entity)
+        else {
+            continue;
+        };
+        let s = card_surface(skin.design, *style, 0.0, 0.0);
+        bg.set_if_neq(WingsBackground(WingsPaint::Role(s.color)));
+        content.set_if_neq(WingsContentColor(WingsPaint::Role(
+            s.color.on().unwrap_or(ColorRole::OnSurface),
+        )));
+        border.set_if_neq(WingsBorderPaint(if s.outlined {
+            WingsPaint::Role(ColorRole::OutlineVariant)
+        } else {
+            WingsPaint::Transparent
+        }));
+        node.border = UiRect::all(px(if s.outlined { 1.0 } else { 0.0 }));
+        shape.set_if_neq(WingsShape(s.shape));
+        elevation.set_if_neq(WingsElevationLevel(s.elevation));
     }
 }

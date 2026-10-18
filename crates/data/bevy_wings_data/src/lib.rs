@@ -12,6 +12,10 @@
 //! | [`TtlCache`], [`Clock`] | Time based expiry with an injectable clock |
 //! | [`Mapper`] | Conversions between transfer objects and domain entities |
 //! | [`WingsLoadable`], [`WingsLoadExt`] | Run a closure on Bevy's async compute pool and receive a [`Loadable`] component |
+//! | [`FileSource`] | A data source persisted as a JSON file, written atomically |
+//! | `DatabaseSource` (feature `database`) | A data source in an embedded, crash safe `redb` database |
+//! | [`HttpRemote`] | A remote source for REST resources over a [`WingsHttpClient`] (`UreqClient` with the `http` feature) |
+//! | [`Codec`], [`JsonCodec`] | Serialization of entities for persistence |
 //!
 //! ```ignore
 //! // Data layer wiring, usually inside a DI module:
@@ -24,6 +28,11 @@
 //! ```
 
 mod cache;
+mod codec;
+#[cfg(feature = "database")]
+mod database;
+mod file;
+mod http;
 mod loader;
 mod mapper;
 mod remote;
@@ -32,6 +41,15 @@ mod source;
 
 pub use bevy_wings_domain::Loadable;
 pub use cache::{CachePolicy, Clock, ManualClock, SystemClock, TtlCache};
+pub use codec::{Codec, JsonCodec};
+#[cfg(feature = "database")]
+pub use database::{DatabaseSource, WingsDatabase};
+pub use file::FileSource;
+#[cfg(feature = "http")]
+pub use http::UreqClient;
+pub use http::{
+    HttpRemote, WingsHttpClient, WingsHttpMethod, WingsHttpRequest, WingsHttpResponse, status_error,
+};
 pub use loader::{
     WingsDataAppExt, WingsLoadExt, WingsLoadFinished, WingsLoadTask, WingsLoadable, poll_loads,
 };
@@ -43,8 +61,9 @@ pub use source::{DataSource, MemorySource};
 /// Commonly used items.
 pub mod prelude {
     pub use crate::{
-        CachePolicy, Clock, DataSource, FakeRemote, ManualClock, Mapper, MemorySource,
-        OfflineFirstRepository, RemoteSource, SystemClock, TtlCache, WingsDataAppExt, WingsLoadExt,
-        WingsLoadFinished, WingsLoadable, mapper,
+        CachePolicy, Clock, Codec, DataSource, FakeRemote, FileSource, HttpRemote, JsonCodec,
+        ManualClock, Mapper, MemorySource, OfflineFirstRepository, RemoteSource, SystemClock,
+        TtlCache, WingsDataAppExt, WingsHttpClient, WingsLoadExt, WingsLoadFinished, WingsLoadable,
+        mapper,
     };
 }

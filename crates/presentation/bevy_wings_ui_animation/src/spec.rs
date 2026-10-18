@@ -43,6 +43,17 @@ impl SpringSpec {
         threshold: 0.001,
     };
 
+    /// A spring described like SwiftUI's `spring(response:dampingFraction:)`: `response` is
+    /// the period of the undamped oscillation in seconds.
+    pub fn from_response(response: f32, damping_ratio: f32) -> Self {
+        let omega = core::f32::consts::TAU / response.max(1e-3);
+        Self {
+            stiffness: omega * omega,
+            damping_ratio,
+            threshold: 0.001,
+        }
+    }
+
     /// Damping coefficient derived from stiffness and damping ratio.
     pub fn damping(&self) -> f32 {
         2.0 * self.damping_ratio * self.stiffness.max(0.0).sqrt()

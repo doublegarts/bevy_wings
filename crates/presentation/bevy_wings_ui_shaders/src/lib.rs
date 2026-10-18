@@ -9,6 +9,9 @@
 //! | [`WingsCircularProgressMaterial`] | Determinate or indeterminate progress ring |
 //! | [`WingsAuroraMaterial`] | Animated three color gradient background |
 //! | [`WingsGlassMaterial`] | Frosted glass tint with grain and an edge highlight |
+//! | [`WingsLiquidGlassMaterial`] | Liquid Glass: the blurred backdrop with refraction and a rim light |
+//! | [`WingsGradientBorderMaterial`] | Border with an angular gradient, optionally turning |
+//! | [`WingsNoiseMaterial`] | Animated fractal noise: paper, clouds, smoke or film grain |
 //!
 //! Every shader is embedded in the binary (no asset files to ship), respects the node's
 //! border radius with an anti aliased signed distance field, and animated ones read Bevy's
@@ -31,6 +34,8 @@ use bevy::shader::ShaderRef;
 use bevy::ui_render::UiMaterialPlugin;
 use bevy::ui_render::ui_material::UiMaterial;
 
+pub mod backdrop;
+
 /// Embedded path of a Wings shader.
 macro_rules! shader_path {
     ($file:literal) => {
@@ -50,13 +55,24 @@ pub mod sources {
     pub const AURORA: &str = include_str!("shaders/aurora.wesl");
     /// Glass shader.
     pub const GLASS: &str = include_str!("shaders/glass.wesl");
-    /// All sources with their file names.
-    pub const ALL: [(&str, &str); 5] = [
+    /// Liquid Glass shader.
+    pub const LIQUID_GLASS: &str = include_str!("shaders/liquid_glass.wesl");
+    /// Gradient border shader.
+    pub const GRADIENT_BORDER: &str = include_str!("shaders/gradient_border.wesl");
+    /// Noise shader.
+    pub const NOISE: &str = include_str!("shaders/noise.wesl");
+    /// Backdrop blur passes (fullscreen, entry points `downsample` and `blur`).
+    pub const BACKDROP: &str = include_str!("shaders/backdrop.wesl");
+    /// All UI material sources with their file names.
+    pub const ALL: [(&str, &str); 8] = [
         ("ripple.wesl", RIPPLE),
         ("shimmer.wesl", SHIMMER),
         ("circular_progress.wesl", CIRCULAR_PROGRESS),
         ("aurora.wesl", AURORA),
         ("glass.wesl", GLASS),
+        ("liquid_glass.wesl", LIQUID_GLASS),
+        ("gradient_border.wesl", GRADIENT_BORDER),
+        ("noise.wesl", NOISE),
     ];
 }
 
@@ -349,6 +365,235 @@ impl UiMaterial for WingsGlassMaterial {
     }
 }
 
+/// Liquid Glass: the blurred backdrop behind the node, bent at the rim like a lens, tinted and
+/// lit. Only meaningful on the Wings overlay layer (see [`backdrop`]); elsewhere use a
+/// translucent fill.
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone, PartialEq)]
+pub struct WingsLiquidGlassMaterial {
+    /// Tint color, strength in alpha.
+    #[uniform(0)]
+    pub tint: LinearRgba,
+    /// Rim light color, strength in alpha.
+    #[uniform(0)]
+    pub highlight: LinearRgba,
+    /// `0` for clear glass, `1` for regular (frosted) glass.
+    #[uniform(0)]
+    pub frost: f32,
+    /// How far the rim bends the backdrop, in physical pixels.
+    #[uniform(0)]
+    pub refraction: f32,
+    /// Width of the lens band along the rim, in physical pixels.
+    #[uniform(0)]
+    pub edge: f32,
+    /// `0..1` glow of interactive glass while pressed.
+    #[uniform(0)]
+    pub press: f32,
+    /// Half resolution backdrop.
+    #[texture(1)]
+    #[sampler(2)]
+    pub light: Handle<Image>,
+    /// Quarter resolution, blurred backdrop.
+    #[texture(3)]
+    #[sampler(4)]
+    pub heavy: Handle<Image>,
+}
+
+impl WingsLiquidGlassMaterial {
+    /// Regular glass over the given backdrop, tinted for a light or dark appearance.
+    pub fn regular(backdrop: &backdrop::WingsBackdrop, dark: bool) -> Self {
+        let (tint, highlight) = if dark {
+            (
+                Color::srgba(0.08, 0.08, 0.09, 0.42),
+                Color::srgba(1.0, 1.0, 1.0, 0.22),
+            )
+        } else {
+            (
+                Color::srgba(1.0, 1.0, 1.0, 0.55),
+                Color::srgba(1.0, 1.0, 1.0, 0.9),
+            )
+        };
+        Self {
+            tint: lin(tint),
+            highlight: lin(highlight),
+            frost: 1.0,
+            refraction: 10.0,
+            edge: 18.0,
+            press: 0.0,
+            light: backdrop.light.clone(),
+            heavy: backdrop.heavy.clone(),
+        }
+    }
+
+    /// Clear glass: little blur and tint, strong lensing.
+    pub fn clear(backdrop: &backdrop::WingsBackdrop, dark: bool) -> Self {
+        let mut m = Self::regular(backdrop, dark);
+        m.frost = 0.15;
+        m.tint = lin(if dark {
+            Color::srgba(0.0, 0.0, 0.0, 0.18)
+        } else {
+            Color::srgba(1.0, 1.0, 1.0, 0.12)
+        });
+        m.refraction = 16.0;
+        m
+    }
+
+    /// Glass tinted with a color (prominent glass buttons).
+    pub fn tinted(backdrop: &backdrop::WingsBackdrop, color: Color, dark: bool) -> Self {
+        let mut m = Self::regular(backdrop, dark);
+        m.tint = lin(color.with_alpha(0.82));
+        m.highlight = lin(Color::srgba(1.0, 1.0, 1.0, 0.45));
+        m
+    }
+}
+
+impl UiMaterial for WingsLiquidGlassMaterial {
+    fn fragment_shader() -> ShaderRef {
+        shader_path!("liquid_glass.wesl").into()
+    }
+}
+
+/// A border with an angular gradient around the node's rounded shape.
+///
+/// The gradient runs from `start` to `end` and back around the ring, so it has no seam; a
+/// non zero `speed` turns it (turns per second), like the glowing outline of a selected or
+/// "AI" control. The inside is filled with `fill`, transparent by default.
+///
+/// The ring is as wide as the node's `Node::border`, so it scales with the display:
+///
+/// ```ignore
+/// commands.spawn((
+///     Node { border: UiRect::all(px(2)), border_radius: BorderRadius::all(px(16)), ..default() },
+///     MaterialNode(materials.add(WingsGradientBorderMaterial::new(start, end).turning(0.25))),
+/// ));
+/// ```
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone, PartialEq)]
+pub struct WingsGradientBorderMaterial {
+    /// Gradient color at the start angle.
+    #[uniform(0)]
+    pub start: LinearRgba,
+    /// Gradient color half way around.
+    #[uniform(0)]
+    pub end: LinearRgba,
+    /// Fill inside the border.
+    #[uniform(0)]
+    pub fill: LinearRgba,
+    /// Border width in physical pixels; 0 uses the node's `Node::border` width.
+    #[uniform(0)]
+    pub width: f32,
+    /// Start angle in radians.
+    #[uniform(0)]
+    pub angle: f32,
+    /// Turns per second (0 for a still gradient).
+    #[uniform(0)]
+    pub speed: f32,
+    /// Padding (keeps the uniform 16 byte aligned).
+    #[uniform(0)]
+    pub padding: f32,
+}
+
+impl Default for WingsGradientBorderMaterial {
+    fn default() -> Self {
+        Self::new(Color::srgb(0.25, 0.5, 1.0), Color::srgb(0.85, 0.3, 0.95))
+    }
+}
+
+impl WingsGradientBorderMaterial {
+    /// A still border from `start` to `end`, as wide as the node's border.
+    pub fn new(start: Color, end: Color) -> Self {
+        Self {
+            start: lin(start),
+            end: lin(end),
+            fill: LinearRgba::NONE,
+            width: 0.0,
+            angle: 0.0,
+            speed: 0.0,
+            padding: 0.0,
+        }
+    }
+
+    /// Fills the inside.
+    pub fn with_fill(mut self, fill: Color) -> Self {
+        self.fill = lin(fill);
+        self
+    }
+
+    /// Turns the gradient at `turns_per_second`.
+    pub fn turning(mut self, turns_per_second: f32) -> Self {
+        self.speed = turns_per_second;
+        self
+    }
+}
+
+impl UiMaterial for WingsGradientBorderMaterial {
+    fn fragment_shader() -> ShaderRef {
+        shader_path!("gradient_border.wesl").into()
+    }
+}
+
+/// Animated fractal noise between two colors.
+///
+/// Large `scale` and several octaves give clouds or smoke; a scale of 1 to 2 px with one octave
+/// and a low `intensity` gives film grain for flat backgrounds.
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone, PartialEq)]
+pub struct WingsNoiseMaterial {
+    /// Color where the noise is 0.
+    #[uniform(0)]
+    pub base: LinearRgba,
+    /// Color where the noise is 1.
+    #[uniform(0)]
+    pub tint: LinearRgba,
+    /// Size of the noise features in physical pixels.
+    #[uniform(0)]
+    pub scale: f32,
+    /// Drift in noise cells per second (0 for still noise).
+    #[uniform(0)]
+    pub speed: f32,
+    /// How far the noise moves from `base` toward `tint`.
+    #[uniform(0)]
+    pub intensity: f32,
+    /// Octaves (1 to 8).
+    #[uniform(0)]
+    pub octaves: f32,
+}
+
+impl Default for WingsNoiseMaterial {
+    fn default() -> Self {
+        Self::clouds(Color::srgb(0.1, 0.12, 0.2), Color::srgb(0.45, 0.55, 0.9))
+    }
+}
+
+impl WingsNoiseMaterial {
+    /// Slowly drifting clouds from `base` to `tint`.
+    pub fn clouds(base: Color, tint: Color) -> Self {
+        Self {
+            base: lin(base),
+            tint: lin(tint),
+            scale: 96.0,
+            speed: 0.08,
+            intensity: 1.0,
+            octaves: 5.0,
+        }
+    }
+
+    /// Still, fine grain over `base` (a `tint` with low alpha keeps it subtle).
+    pub fn grain(base: Color, tint: Color) -> Self {
+        Self {
+            base: lin(base),
+            tint: lin(tint),
+            scale: 1.5,
+            speed: 0.0,
+            intensity: 1.0,
+            octaves: 1.0,
+        }
+    }
+}
+
+impl UiMaterial for WingsNoiseMaterial {
+    fn fragment_shader() -> ShaderRef {
+        shader_path!("noise.wesl").into()
+    }
+}
+
 /// Converts a color to the `[f32; 4]` linear representation used by the uniforms.
 pub fn linear_array(c: Color) -> [f32; 4] {
     c.to_linear().to_f32_array()
@@ -365,20 +610,29 @@ impl Plugin for WingsShadersPlugin {
         embedded_asset!(app, "shaders/circular_progress.wesl");
         embedded_asset!(app, "shaders/aurora.wesl");
         embedded_asset!(app, "shaders/glass.wesl");
+        embedded_asset!(app, "shaders/liquid_glass.wesl");
+        embedded_asset!(app, "shaders/gradient_border.wesl");
+        embedded_asset!(app, "shaders/noise.wesl");
         app.add_plugins((
             UiMaterialPlugin::<WingsRippleMaterial>::default(),
             UiMaterialPlugin::<WingsShimmerMaterial>::default(),
             UiMaterialPlugin::<WingsCircularProgressMaterial>::default(),
             UiMaterialPlugin::<WingsAuroraMaterial>::default(),
             UiMaterialPlugin::<WingsGlassMaterial>::default(),
+            UiMaterialPlugin::<WingsLiquidGlassMaterial>::default(),
+            UiMaterialPlugin::<WingsGradientBorderMaterial>::default(),
+            UiMaterialPlugin::<WingsNoiseMaterial>::default(),
+            backdrop::WingsBackdropPlugin,
         ));
     }
 }
 
 /// Commonly used items.
 pub mod prelude {
+    pub use crate::backdrop::{WingsBackdrop, WingsBackdropCamera};
     pub use crate::{
         WingsAuroraMaterial, WingsCircularProgressMaterial, WingsGlassMaterial,
+        WingsGradientBorderMaterial, WingsLiquidGlassMaterial, WingsNoiseMaterial,
         WingsRippleMaterial, WingsShadersPlugin, WingsShimmerMaterial,
     };
     pub use bevy::ui_render::prelude::MaterialNode;
@@ -452,6 +706,9 @@ mod tests {
             ("circular_progress.wesl", "CircularProgressMaterial", 48),
             ("aurora.wesl", "AuroraMaterial", 64),
             ("glass.wesl", "GlassMaterial", 48),
+            ("liquid_glass.wesl", "LiquidGlassMaterial", 48),
+            ("gradient_border.wesl", "GradientBorderMaterial", 64),
+            ("noise.wesl", "NoiseMaterial", 48),
         ];
         for (file, struct_name, size) in expected {
             let src = sources::ALL.iter().find(|(n, _)| *n == file).unwrap().1;
@@ -476,6 +733,24 @@ mod tests {
         );
         assert_eq!(2 * size_of::<LinearRgba>() + 4 * size_of::<f32>(), 48);
         assert_eq!(3 * size_of::<LinearRgba>() + 4 * size_of::<f32>(), 64);
+    }
+
+    /// The backdrop passes parse, validate and expose both entry points.
+    #[test]
+    fn backdrop_shader_validates() {
+        let module = parse("backdrop.wesl", sources::BACKDROP);
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        )
+        .validate(&module)
+        .unwrap();
+        for entry in ["downsample", "blur"] {
+            assert!(
+                module.entry_points.iter().any(|e| e.name == entry),
+                "{entry}"
+            );
+        }
     }
 
     /// Picking hits map to UV space.

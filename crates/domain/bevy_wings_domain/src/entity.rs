@@ -75,6 +75,20 @@ pub trait DomainEntity: Clone + Send + Sync + 'static {
     fn id(&self) -> Id<Self>;
 }
 
+#[cfg(feature = "serde")]
+impl<T: ?Sized> serde::Serialize for Id<T> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u64(self.value)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: ?Sized> serde::Deserialize<'de> for Id<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        u64::deserialize(deserializer).map(Id::new)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

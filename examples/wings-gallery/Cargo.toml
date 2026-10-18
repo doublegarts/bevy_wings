@@ -24,5 +24,9 @@ bevy = { workspace = true, features = [
     "default_font",
 ] }
 
+# Theme files reload when saved (desktop only).
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+bevy = { workspace = true, features = ["file_watcher"] }
+
 [lints]
 workspace = true

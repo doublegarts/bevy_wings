@@ -1,0 +1,19 @@
+# A custom design that looks the same on every platform. Run the gallery with
+# WINGS_THEME_FILE=themes/brand.wings.toml, then edit and save this file: the theme reloads.
+ui = "custom"
+appearance = "system"
+accent = "#6750A4"
+
+[custom]
+design = "material"
+font_scale = 1.0
+radii = [0, 6, 10, 14, 20, 28]
+spacing = [4, 8, 16, 24, 32]
+
+[custom.light]
+primary = "#6750A4"
+background = "#FFFBFE"
+
+[custom.dark]
+primary = "#D0BCFF"
+background = "#141218"

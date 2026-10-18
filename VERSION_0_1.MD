@@ -177,25 +177,7 @@ the logic around it is tested.
 
 ---
 
-## Version 0.2.0 (planned)
+## Version 0.2.0
 
-- [ ] File and database backed data sources
-- [ ] HTTP remote source on top of Bevy's async tasks
-- [ ] Serialization of entities for persistence
-- [ ] Use case pipelines (retry, timeout, logging) as decorators
-- [ ] `Loadable` bindings in the MVVM crate
-- [ ] `.bsn` asset files for widget scenes once Bevy ships the asset format
-- [ ] Lazy, virtualized lists and grids for thousands of rows
-- [ ] Navigation results (return a value to the previous destination)
-- [ ] Deep links and saving and restoring the back stack
-- [ ] Shared element transitions between destinations
-- [ ] Tabs, segmented buttons, menus, dropdowns and tooltips
-- [ ] Date and time pickers
-- [ ] Bottom sheets and side sheets
-- [ ] Focus ring styling for keyboard navigation
-- [ ] Right to left layout support
-- [ ] Theme definitions loaded from asset files with hot reload
-- [ ] More shaders: blur behind panels, gradient borders, noise backgrounds
-- [ ] Gamepad navigation polish
-- [ ] Benchmarks with very large widget counts
-- [ ] Screenshot based visual regression tests on a GPU runner
+Implemented: see [VERSION_0_2.MD](VERSION_0_2.MD) for the checklist of everything planned here
+and the new designs (Cupertino with Liquid Glass, Fluent), safe areas and `wings.toml`.

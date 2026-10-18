@@ -94,6 +94,19 @@ use bevy::app::{PluginGroup, PluginGroupBuilder};
 /// ```
 pub struct WingsUiPlugins;
 
+impl WingsUiPlugins {
+    /// The plugin group with the theme described by a `wings.toml` configuration:
+    /// `ui = "system"` for the platform's own design, `ui = "custom"` for one design on every
+    /// platform.
+    ///
+    /// ```ignore
+    /// app.add_plugins(WingsUiPlugins::configured(wings_config!()));
+    /// ```
+    pub fn configured(config: theme::config::WingsConfig) -> PluginGroupBuilder {
+        WingsUiPlugins.set(theme::WingsThemePlugin::from_config(config))
+    }
+}
+
 impl PluginGroup for WingsUiPlugins {
     fn build(self) -> PluginGroupBuilder {
         let group = PluginGroupBuilder::start::<Self>()
@@ -123,6 +136,7 @@ pub mod prelude {
     #[cfg(feature = "shaders")]
     pub use bevy_wings_ui_shaders::{
         WingsAuroraMaterial, WingsCircularProgressMaterial, WingsGlassMaterial,
+        WingsGradientBorderMaterial, WingsLiquidGlassMaterial, WingsNoiseMaterial,
         WingsRippleMaterial, WingsShimmerMaterial,
     };
     pub use bevy_wings_ui_theme::prelude::*;

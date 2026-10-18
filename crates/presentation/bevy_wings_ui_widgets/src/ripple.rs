@@ -4,6 +4,8 @@
 //! [`WingsRipple`] automatically when the `shaders` feature is enabled. A press spawns a
 //! short lived child node that expands a circle from the pointer position, clipped to the
 //! widget's rounded corners, then fades out.
+//!
+//! Ripples are a Material effect: the iOS, macOS and Fluent skins give feedback without them.
 
 use bevy::picking::events::PointerPress;
 use bevy::prelude::*;
@@ -62,12 +64,16 @@ pub fn spawn_ripple(
     press: On<PointerPress>,
     mut commands: Commands,
     theme: Res<WingsTheme>,
+    skin: Res<crate::skin::WingsSkin>,
     materials: Option<ResMut<Assets<WingsRippleMaterial>>>,
     widgets: Query<(&WingsRipple, &Node, Option<&WingsStateLayer>), Without<InteractionDisabled>>,
 ) {
     let Some(mut materials) = materials else {
         return;
     };
+    if skin.design != bevy_wings_ui_theme::prelude::WingsDesign::Material {
+        return;
+    }
     let target = press.event_target();
     let Ok((ripple, node, layer)) = widgets.get(target) else {
         return;

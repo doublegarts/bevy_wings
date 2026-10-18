@@ -194,6 +194,16 @@ impl Default for WingsColorTransition {
 #[require(TextFont, LineHeight, LetterSpacing)]
 pub struct WingsTypeStyle(pub TypeRole);
 
+/// Per entity adjustment of a [`WingsTypeStyle`]: a fixed size and or weight that replace the
+/// role's values (for example the 10 point tab bar labels of the iOS design).
+#[derive(Component, Debug, Clone, Copy, PartialEq, Default)]
+pub struct WingsTypeOverride {
+    /// Font size in logical pixels.
+    pub size: Option<f32>,
+    /// Font weight.
+    pub weight: Option<bevy::text::FontWeight>,
+}
+
 /// Shape role for a node's corners.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[require(Node)]
@@ -423,22 +433,28 @@ pub fn paint_system(
     }
 }
 
-/// Applies [`WingsTypeStyle`] roles to text fonts.
+/// Applies [`WingsTypeStyle`] roles (and [`WingsTypeOverride`]s) to text fonts.
 pub fn typography_system(
     theme: Res<WingsTheme>,
     mut query: Query<(
         Ref<WingsTypeStyle>,
+        Option<Ref<WingsTypeOverride>>,
         &mut TextFont,
         &mut LineHeight,
         &mut LetterSpacing,
     )>,
 ) {
     let full = theme.is_changed();
-    for (role, mut font, mut line, mut spacing) in &mut query {
-        if !full && !role.is_changed() {
+    for (role, adjust, mut font, mut line, mut spacing) in &mut query {
+        let adjusted = adjust.as_ref().is_some_and(|a| a.is_changed());
+        if !full && !role.is_changed() && !adjusted {
             continue;
         }
-        let style = theme.typography.get(role.0);
+        let mut style = theme.typography.get(role.0);
+        if let Some(adjust) = adjust {
+            style.size = adjust.size.unwrap_or(style.size);
+            style.weight = adjust.weight.unwrap_or(style.weight);
+        }
         font.font = theme.typography.font.clone();
         font.font_size = FontSize::Px(style.size);
         font.weight = style.weight;

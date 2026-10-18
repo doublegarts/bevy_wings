@@ -2,6 +2,7 @@
 
 /// A page request. Pages are zero based.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PageRequest {
     /// Page index.
     pub page: usize,
@@ -37,6 +38,7 @@ impl Default for PageRequest {
 
 /// One page of results.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Page<T> {
     /// Items of this page.
     pub items: Vec<T>,

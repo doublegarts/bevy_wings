@@ -45,10 +45,17 @@ use bevy::ui::{Display, Node, PositionType, UiTransform, Val};
 
 use bevy_wings_di::WingsDiScope;
 use bevy_wings_ui_animation::prelude::{
-    OpacityProperty, ScaleProperty, TranslationProperty, WingsAnimator, WingsTransition,
+    AnimationSpec, OpacityProperty, ScaleProperty, SpringSpec, TranslationProperty, WingsAnimator,
+    WingsEasing, WingsTransition,
 };
 use bevy_wings_ui_core::{WingsOpacity, WingsUiSystems, ensure_core};
 use bevy_wings_ui_responsive::{WidthClass, WingsViewport};
+use bevy_wings_ui_theme::prelude::{WingsDesign, WingsTheme};
+
+pub mod deep_link;
+pub mod persist;
+pub mod results;
+pub mod shared;
 
 pub use back_stack::{NavKey, WingsBackStack};
 pub use scene_strategy::{NavSceneStrategy, PaneRole, PaneSlot};
@@ -100,6 +107,58 @@ impl WingsNavTransitions {
             push_exit: WingsTransition::fade(),
             pop_enter: WingsTransition::fade(),
             pop_exit: WingsTransition::scale(0.92).and(WingsTransition::fade()),
+        }
+    }
+
+    /// iOS navigation stack: the new screen slides in from the trailing edge while the
+    /// covered one shifts a little to the leading edge.
+    pub fn ios() -> Self {
+        let spec = AnimationSpec::spring_with(SpringSpec::from_response(0.45, 1.0));
+        Self {
+            push_enter: WingsTransition::slide_horizontally(360.0).with_spec(spec),
+            push_exit: WingsTransition::slide_horizontally(-110.0)
+                .and(WingsTransition::fade())
+                .with_spec(spec),
+            pop_enter: WingsTransition::slide_horizontally(-110.0)
+                .and(WingsTransition::fade())
+                .with_spec(spec),
+            pop_exit: WingsTransition::slide_horizontally(360.0).with_spec(spec),
+        }
+    }
+
+    /// Fluent page transition: entering pages rise and fade in, leaving pages fade out.
+    pub fn fluent() -> Self {
+        let spec =
+            AnimationSpec::millis(300).with_easing(WingsEasing::CubicBezier(0.0, 0.0, 0.0, 1.0));
+        Self {
+            push_enter: WingsTransition::slide_vertically(40.0)
+                .and(WingsTransition::fade())
+                .with_spec(spec),
+            push_exit: WingsTransition::fade().with_spec(AnimationSpec::millis(150)),
+            pop_enter: WingsTransition::fade().with_spec(spec),
+            pop_exit: WingsTransition::slide_vertically(40.0)
+                .and(WingsTransition::fade())
+                .with_spec(AnimationSpec::millis(150)),
+        }
+    }
+
+    /// The default transitions of a design: [`slide`](Self::slide) for Material,
+    /// [`ios`](Self::ios), [`fade`](Self::fade) for macOS and [`fluent`](Self::fluent).
+    pub fn for_design(design: WingsDesign) -> Self {
+        match design {
+            WingsDesign::Material => Self::slide(),
+            WingsDesign::Ios => Self::ios(),
+            WingsDesign::MacOs => Self::fade(),
+            WingsDesign::Fluent => Self::fluent(),
+        }
+    }
+
+    /// The transitions a display really uses: displays that keep the default transitions
+    /// follow the design of the theme, customized ones are used as they are.
+    pub fn effective(self, design: Option<WingsDesign>) -> Self {
+        match design {
+            Some(design) if self == Self::default() => Self::for_design(design),
+            _ => self,
         }
     }
 
@@ -329,6 +388,8 @@ pub struct WingsBackInput {
     pub keys: Vec<KeyCode>,
     /// Use the mouse back button.
     pub mouse_back: bool,
+    /// Use the gamepad East button (B, Circle).
+    pub gamepad_back: bool,
 }
 
 impl Default for WingsBackInput {
@@ -336,6 +397,7 @@ impl Default for WingsBackInput {
         Self {
             keys: vec![KeyCode::Escape, KeyCode::BrowserBack],
             mouse_back: true,
+            gamepad_back: true,
         }
     }
 }
@@ -366,11 +428,16 @@ pub fn back_input<K: NavKey>(
     input: Res<WingsBackInput>,
     keys: Option<Res<ButtonInput<KeyCode>>>,
     mouse: Option<Res<ButtonInput<MouseButton>>>,
+    gamepads: Query<&bevy::input::gamepad::Gamepad>,
     mut stack: ResMut<WingsBackStack<K>>,
 ) {
     let key_back = keys.is_some_and(|k| k.any_just_pressed(input.keys.iter().copied()));
     let mouse_back = input.mouse_back && mouse.is_some_and(|m| m.just_pressed(MouseButton::Back));
-    if (key_back || mouse_back) && stack.can_pop() {
+    let pad_back = input.gamepad_back
+        && gamepads
+            .iter()
+            .any(|g| g.just_pressed(bevy::input::gamepad::GamepadButton::East));
+    if (key_back || mouse_back || pad_back) && stack.can_pop() {
         stack.pop();
     }
 }
@@ -397,6 +464,7 @@ pub fn sync_nav_displays<K: NavKey>(
     stack: Res<WingsBackStack<K>>,
     graph: Res<WingsNavGraph<K>>,
     viewport: Option<Res<WingsViewport>>,
+    theme: Option<Res<WingsTheme>>,
     mut displays: Query<(
         Entity,
         &WingsNavDisplay<K>,
@@ -409,7 +477,9 @@ pub fn sync_nav_displays<K: NavKey>(
     let class = viewport
         .as_ref()
         .map_or(WidthClass::Compact, |v| v.width_class);
+    let design = theme.as_ref().map(|t| t.design);
     for (display_entity, display, state) in &mut displays {
+        let display_transitions = display.transitions.effective(design);
         let Some(mut state) = state else {
             commands
                 .entity(display_entity)
@@ -436,7 +506,7 @@ pub fn sync_nav_displays<K: NavKey>(
                 key: state.keys[i].clone(),
             });
             let Some(e) = state.entities[i] else { continue };
-            let transitions = state.transitions[i].unwrap_or(display.transitions);
+            let transitions = state.transitions[i].unwrap_or(display_transitions);
             if old_visible.contains(&i) && !first {
                 let exit = if forward {
                     transitions.push_exit
@@ -472,7 +542,7 @@ pub fn sync_nav_displays<K: NavKey>(
                         *node = pane_node(slot);
                     }
                     if !was_visible && !first {
-                        let t = state.transitions[index].unwrap_or(display.transitions);
+                        let t = state.transitions[index].unwrap_or(display_transitions);
                         let enter = if forward { t.push_enter } else { t.pop_enter };
                         commands
                             .entity(e)
@@ -504,7 +574,7 @@ pub fn sync_nav_displays<K: NavKey>(
                     state.entities[index] = Some(root);
                     events.write(WingsNavEvent::Spawned { key, entity: root });
                     if !first {
-                        let t = destination.transitions.unwrap_or(display.transitions);
+                        let t = destination.transitions.unwrap_or(display_transitions);
                         let enter = if forward { t.push_enter } else { t.pop_enter };
                         commands
                             .entity(root)
@@ -520,7 +590,7 @@ pub fn sync_nav_displays<K: NavKey>(
                 && !plan.iter().any(|(p, _)| *p == i)
                 && let Some(e) = state.entities[i]
             {
-                let t = state.transitions[i].unwrap_or(display.transitions);
+                let t = state.transitions[i].unwrap_or(display_transitions);
                 let exit = t.push_exit;
                 commands
                     .entity(e)
@@ -604,14 +674,35 @@ impl<K: NavKey> Plugin for WingsNavigationPlugin<K> {
             roles: Default::default(),
         });
         app.init_resource::<WingsBackInput>()
+            .init_resource::<results::WingsPendingResults<K>>()
             .add_message::<WingsNavEvent<K>>()
-            .add_message::<WingsNavCommand<K>>();
+            .add_message::<WingsNavCommand<K>>()
+            .add_message::<results::WingsNavResultMessage<K>>();
         app.add_systems(
             Update,
-            (apply_nav_commands::<K>, sync_nav_displays::<K>)
+            (
+                deep_link::open_deep_links::<K>,
+                apply_nav_commands::<K>,
+                sync_nav_displays::<K>,
+                results::deliver_nav_results::<K>,
+            )
                 .chain()
                 .in_set(WingsUiSystems::Navigation),
         );
+        if !app
+            .world()
+            .contains_resource::<shared::WingsSharedElementRects>()
+        {
+            app.init_resource::<shared::WingsSharedElementRects>()
+                .init_resource::<shared::WingsSharedElementMotion>()
+                .add_message::<deep_link::WingsOpenDeepLink>()
+                .add_message::<deep_link::WingsDeepLinkFailed>()
+                .add_systems(Startup, deep_link::open_command_line_link)
+                .add_systems(
+                    Update,
+                    shared::shared_element_system.after(WingsUiSystems::Navigation),
+                );
+        }
         if self.back_input {
             app.add_systems(Update, back_input::<K>.in_set(WingsUiSystems::Input));
         }
@@ -628,7 +719,17 @@ struct FinishExitsAdded;
 /// Commonly used items.
 pub mod prelude {
     pub use crate::back_stack::{NavKey, WingsBackStack};
+    pub use crate::deep_link::{
+        WingsDeepLinkFailed, WingsDeepLinks, WingsLinkParams, WingsOpenDeepLink,
+    };
+    pub use crate::persist::{
+        WingsBackStackPersistencePlugin, WingsFileStore, WingsMemoryStore, WingsStateStore,
+    };
+    pub use crate::results::{
+        WingsNavResult, WingsNavResultMessage, WingsNavResultReceived, WingsNavigator,
+    };
     pub use crate::scene_strategy::{NavSceneStrategy, PaneRole, PaneSlot};
+    pub use crate::shared::{WingsSharedElement, WingsSharedElementMotion};
     pub use crate::{
         NavDestination, WingsBackInput, WingsNavCommand, WingsNavDisplay, WingsNavDisplayState,
         WingsNavEntry, WingsNavEvent, WingsNavGraph, WingsNavTransitions, WingsNavigationPlugin,
@@ -637,8 +738,31 @@ pub mod prelude {
 }
 
 #[cfg(test)]
+mod design_tests {
+    use super::*;
+
+    /// Default transitions follow the design, custom ones are kept.
+    #[test]
+    fn transitions_follow_design() {
+        let d = WingsNavTransitions::default();
+        assert_eq!(d.effective(None), d);
+        assert_eq!(
+            d.effective(Some(WingsDesign::Ios)),
+            WingsNavTransitions::ios()
+        );
+        assert_eq!(
+            d.effective(Some(WingsDesign::MacOs)),
+            WingsNavTransitions::fade()
+        );
+        let custom = WingsNavTransitions::zoom();
+        assert_eq!(custom.effective(Some(WingsDesign::Ios)), custom);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::prelude::*;
+    use bevy::ecs::system::RunSystemOnce;
     use bevy::prelude::*;
     use bevy::scene::ScenePlugin;
     use bevy::time::TimeUpdateStrategy;
@@ -863,5 +987,119 @@ mod tests {
         assert_ne!(old, new);
         assert_eq!(tag_of(&app, new), 102);
         assert!(app.world().get_entity(old).is_err());
+    }
+
+    #[derive(Resource, Default)]
+    struct Received(Vec<u32>);
+
+    /// A popped destination returns a value to the revealed one, as a message and as an
+    /// entity event on its root.
+    #[test]
+    fn pop_with_result_delivers() {
+        let (mut app, display) = app(400.0);
+        app.init_resource::<Received>();
+        app.add_observer(|ev: On<WingsNavResultReceived>, mut r: ResMut<Received>| {
+            if let Some(v) = ev.value.get::<u32>() {
+                r.0.push(*v);
+            }
+        });
+        app.world_mut()
+            .resource_mut::<WingsBackStack<Screen>>()
+            .push(Screen::Inbox);
+        settle(&mut app);
+        app.world_mut()
+            .run_system_once(|mut nav: WingsNavigator<Screen>| {
+                assert!(nav.pop_with_result(7_u32));
+            })
+            .unwrap();
+        app.update();
+        assert_eq!(app.world().resource::<Received>().0, vec![7]);
+        let (entities, _) = state(&app, display);
+        assert_eq!(entities.len(), 1);
+        // Nothing to return to: the stack stays.
+        app.world_mut()
+            .run_system_once(|mut nav: WingsNavigator<Screen>| {
+                assert!(!nav.pop_with_result(1_u32));
+            })
+            .unwrap();
+    }
+
+    /// Deep links replace the back stack; unknown links are reported.
+    #[test]
+    fn deep_links_open_stacks() {
+        let (mut app, _) = app(400.0);
+        app.insert_resource(
+            WingsDeepLinks::<Screen>::new()
+                .route("/inbox", |_| Some(vec![Screen::Home, Screen::Inbox]))
+                .route("/inbox/:id", |p| {
+                    Some(vec![
+                        Screen::Home,
+                        Screen::Inbox,
+                        Screen::Message(p.get("id")?.parse().ok()?),
+                    ])
+                }),
+        );
+        app.world_mut()
+            .write_message(WingsOpenDeepLink::new("app://inbox/5"));
+        app.update();
+        assert_eq!(
+            app.world().resource::<WingsBackStack<Screen>>().entries(),
+            &[Screen::Home, Screen::Inbox, Screen::Message(5)]
+        );
+        app.world_mut()
+            .write_message(WingsOpenDeepLink::new("app://nowhere"));
+        app.update();
+        let failed = app
+            .world()
+            .resource::<Messages<WingsDeepLinkFailed>>()
+            .iter_current_update_messages()
+            .count();
+        assert_eq!(failed, 1);
+    }
+
+    /// When a tag moves to another entity, the new one starts where the old one was.
+    #[test]
+    fn shared_elements_move() {
+        use bevy::ui::{ComputedNode, UiGlobalTransform};
+        let (mut app, _) = app(400.0);
+        let node = |size: Vec2| ComputedNode {
+            size,
+            inverse_scale_factor: 1.0,
+            ..default()
+        };
+        let a = app
+            .world_mut()
+            .spawn((
+                WingsSharedElement::new("hero"),
+                node(Vec2::new(100.0, 100.0)),
+                UiGlobalTransform::from_translation(Vec2::new(50.0, 50.0)),
+                UiTransform::default(),
+            ))
+            .id();
+        app.update();
+        app.world_mut().entity_mut(a).despawn();
+        let b = app
+            .world_mut()
+            .spawn((
+                WingsSharedElement::new("hero"),
+                node(Vec2::new(200.0, 200.0)),
+                UiGlobalTransform::from_translation(Vec2::new(300.0, 300.0)),
+                UiTransform::default(),
+            ))
+            .id();
+        app.update();
+        app.update();
+        let t = app.world().get::<UiTransform>(b).unwrap();
+        // Starts near the old place and size, then springs home.
+        assert!(
+            matches!(t.translation.x, Val::Px(x) if x < -100.0),
+            "{:?}",
+            t.translation
+        );
+        assert!(t.scale.x < 0.8, "{:?}", t.scale);
+        settle(&mut app);
+        settle(&mut app);
+        let t = app.world().get::<UiTransform>(b).unwrap();
+        assert!(matches!(t.translation.x, Val::Px(x) if x.abs() < 1.0));
     }
 }

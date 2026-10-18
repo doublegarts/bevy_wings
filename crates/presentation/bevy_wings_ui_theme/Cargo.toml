@@ -14,6 +14,13 @@ categories.workspace = true
 bevy = { workspace = true, features = ["std", "bevy_ui", "bevy_text", "bevy_color", "bevy_window"] }
 bevy_wings_ui_core = { workspace = true }
 bevy_wings_ui_animation = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
+
+# On Apple platforms the Apple designs use the system UI font (San Francisco), which Bevy finds
+# through its system font discovery. Wings never bundles Apple fonts.
+[target.'cfg(target_vendor = "apple")'.dependencies]
+bevy = { workspace = true, features = ["system_font_discovery"] }
 
 [lints]
 workspace = true

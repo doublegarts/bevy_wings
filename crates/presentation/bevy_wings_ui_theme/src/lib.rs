@@ -12,6 +12,8 @@
 //!   whole tree in a single pass when the theme flips, with an animated cross fade.
 //! * [`WingsLocalTheme`](theme::WingsLocalTheme) forces a subtree light or dark.
 //! * `WingsThemeMode::System` follows the operating system preference.
+//! * [`WingsDesign`](design::WingsDesign) selects Material or the Apple (SwiftUI) look. The
+//!   default theme uses the platform's own design.
 //!
 //! ## Example: twenty buttons, one switch
 //!
@@ -30,6 +32,9 @@
 //! }
 //! ```
 
+pub mod config;
+pub mod design;
+pub mod file;
 pub mod fonts;
 pub mod paint;
 pub mod scheme;
@@ -56,6 +61,12 @@ impl WingsThemePlugin {
     pub fn with_theme(theme: WingsTheme) -> Self {
         Self { theme: Some(theme) }
     }
+
+    /// Plugin with the theme described by a `wings.toml` configuration (see
+    /// [`wings_config!`](crate::wings_config)).
+    pub fn from_config(config: config::WingsConfig) -> Self {
+        Self::with_theme(config.theme())
+    }
 }
 
 impl Plugin for WingsThemePlugin {
@@ -72,7 +83,8 @@ impl Plugin for WingsThemePlugin {
                 app.init_resource::<WingsTheme>();
             }
         }
-        app.add_systems(PreStartup, fonts::install_default_font);
+        app.add_systems(PreStartup, fonts::install_default_font)
+            .add_systems(PostUpdate, sync_clear_color);
         app.add_message::<WingsThemeChanged>().add_systems(
             Update,
             (
@@ -87,6 +99,19 @@ impl Plugin for WingsThemePlugin {
                 .chain()
                 .in_set(WingsUiSystems::Theme),
         );
+    }
+}
+
+/// Keeps Bevy's [`ClearColor`] on the theme's background, so areas no UI covers (window edges
+/// during resizes, letterboxing) match the app.
+pub fn sync_clear_color(theme: Res<WingsTheme>, clear: Option<ResMut<ClearColor>>) {
+    if let Some(mut clear) = clear
+        && theme.is_changed()
+    {
+        let background = theme.color(scheme::ColorRole::Background);
+        if clear.0 != background {
+            clear.0 = background;
+        }
     }
 }
 
@@ -113,17 +138,21 @@ pub fn follow_system_theme(
 /// Commonly used items.
 pub mod prelude {
     pub use crate::WingsThemePlugin;
+    pub use crate::config::{WingsAppearance, WingsConfig, WingsCustomUi, WingsUiMode};
+    pub use crate::design::WingsDesign;
+    pub use crate::file::{WingsThemeFile, WingsThemeFilePlugin, WingsThemeSource};
     pub use crate::paint::{
         WingsBackground, WingsBorderPaint, WingsColorTransition, WingsContentColor,
         WingsElevationLevel, WingsForeground, WingsInheritContentColor, WingsPaint, WingsShape,
-        WingsStateLayer, WingsTypeStyle,
+        WingsStateLayer, WingsTypeOverride, WingsTypeStyle,
     };
-    pub use crate::scheme::{ColorRole, WingsColorScheme, contrast_ratio};
+    pub use crate::scheme::{AppleSystemColors, ColorRole, WingsColorScheme, contrast_ratio};
     pub use crate::theme::{WingsLocalTheme, WingsTheme, WingsThemeChanged, WingsThemeMode};
     pub use crate::tokens::{
         ShapeRole, TypeRole, WingsElevation, WingsMotion, WingsShapes, WingsSpacing,
         WingsTextStyle, WingsTypography,
     };
+    pub use crate::wings_config;
 }
 
 #[cfg(test)]
@@ -148,7 +177,7 @@ mod tests {
     }
 
     fn instant_theme() -> WingsTheme {
-        let mut t = WingsTheme::default();
+        let mut t = WingsTheme::material();
         t.motion.theme_transition = None;
         t
     }
@@ -194,7 +223,7 @@ mod tests {
     /// jumping, and reach the dark color once the transition completes.
     #[test]
     fn theme_switch_cross_fades() {
-        let mut theme = WingsTheme::default();
+        let mut theme = WingsTheme::material();
         theme.motion.theme_transition =
             Some(bevy_wings_ui_animation::prelude::AnimationSpec::millis(200));
         let mut app = app(theme);

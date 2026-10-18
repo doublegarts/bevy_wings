@@ -2,7 +2,8 @@
 
 use bevy::prelude::*;
 
-use crate::scheme::{ColorRole, WingsColorScheme};
+use crate::design::WingsDesign;
+use crate::scheme::{AppleSystemColors, ColorRole, WingsColorScheme};
 use crate::tokens::{WingsElevation, WingsMotion, WingsShapes, WingsSpacing, WingsTypography};
 
 /// Which color scheme to use.
@@ -19,8 +20,17 @@ pub enum WingsThemeMode {
 
 /// The application theme. Mutating this resource (for example with
 /// [`WingsTheme::toggle_dark`]) recolors every themed entity in the next frame.
+///
+/// The theme carries a [`WingsDesign`]. [`WingsTheme::default`] uses the platform's own design
+/// ([`WingsDesign::native`]): SwiftUI style on iPhone, iPad and Mac, Material elsewhere.
+/// [`WingsTheme::set_design`] switches every token set at runtime and widgets re-skin
+/// themselves.
 #[derive(Resource, Debug, Clone)]
 pub struct WingsTheme {
+    /// Design language. Change it with [`WingsTheme::set_design`] so the tokens follow.
+    pub design: WingsDesign,
+    /// Seed or tint color the schemes were built from, `None` for the design's default.
+    pub seed: Option<Color>,
     /// Selected mode.
     pub mode: WingsThemeMode,
     /// Scheme used in light mode.
@@ -43,28 +53,104 @@ pub struct WingsTheme {
 
 impl Default for WingsTheme {
     fn default() -> Self {
-        Self {
-            mode: WingsThemeMode::Light,
-            light: WingsColorScheme::light(),
-            dark: WingsColorScheme::dark(),
-            typography: WingsTypography::default(),
-            shapes: WingsShapes::default(),
-            spacing: WingsSpacing::default(),
-            elevation: WingsElevation::default(),
-            motion: WingsMotion::default(),
-            system_prefers_dark: false,
-        }
+        Self::for_design(WingsDesign::native())
     }
 }
 
 impl WingsTheme {
-    /// A theme generated from one seed color.
-    pub fn from_seed(seed: Color) -> Self {
+    /// The default theme of a design.
+    pub fn for_design(design: WingsDesign) -> Self {
+        Self::build(design, None, WingsThemeMode::Light, false)
+    }
+
+    /// The Material theme (the Wings 0.1 look) on every platform.
+    pub fn material() -> Self {
+        Self::for_design(WingsDesign::Material)
+    }
+
+    /// The iOS (SwiftUI) theme on every platform.
+    pub fn ios() -> Self {
+        Self::for_design(WingsDesign::Ios)
+    }
+
+    /// The macOS (SwiftUI) theme on every platform.
+    pub fn macos() -> Self {
+        Self::for_design(WingsDesign::MacOs)
+    }
+
+    /// The Fluent (Windows 11) theme on every platform.
+    pub fn fluent() -> Self {
+        Self::for_design(WingsDesign::Fluent)
+    }
+
+    fn build(
+        design: WingsDesign,
+        seed: Option<Color>,
+        mode: WingsThemeMode,
+        system_prefers_dark: bool,
+    ) -> Self {
+        let (light, dark) = Self::schemes(design, seed);
         Self {
-            light: WingsColorScheme::from_seed(seed, false),
-            dark: WingsColorScheme::from_seed(seed, true),
-            ..Default::default()
+            design,
+            seed,
+            mode,
+            light,
+            dark,
+            typography: WingsTypography::for_design(design),
+            shapes: WingsShapes::for_design(design),
+            spacing: WingsSpacing::for_design(design),
+            elevation: WingsElevation::for_design(design),
+            motion: WingsMotion::for_design(design),
+            system_prefers_dark,
         }
+    }
+
+    fn schemes(design: WingsDesign, seed: Option<Color>) -> (WingsColorScheme, WingsColorScheme) {
+        match design {
+            WingsDesign::Material => {
+                let seed = seed.unwrap_or(WingsColorScheme::DEFAULT_SEED);
+                (
+                    WingsColorScheme::from_seed(seed, false),
+                    WingsColorScheme::from_seed(seed, true),
+                )
+            }
+            WingsDesign::Ios => (
+                WingsColorScheme::apple(AppleSystemColors::ios(false), seed, false),
+                WingsColorScheme::apple(AppleSystemColors::ios(true), seed, true),
+            ),
+            WingsDesign::MacOs => (
+                WingsColorScheme::apple(AppleSystemColors::macos(false), seed, false),
+                WingsColorScheme::apple(AppleSystemColors::macos(true), seed, true),
+            ),
+            WingsDesign::Fluent => (
+                WingsColorScheme::fluent(false, seed),
+                WingsColorScheme::fluent(true, seed),
+            ),
+        }
+    }
+
+    /// A theme generated from one seed color in the native design. Material builds tonal
+    /// palettes from the seed; Apple designs use it as the tint, like `.tint()` in SwiftUI.
+    pub fn from_seed(seed: Color) -> Self {
+        Self::build(
+            WingsDesign::native(),
+            Some(seed),
+            WingsThemeMode::Light,
+            false,
+        )
+    }
+
+    /// Builder: sets the design (see [`WingsTheme::set_design`]).
+    pub fn with_design(mut self, design: WingsDesign) -> Self {
+        self.set_design(design);
+        self
+    }
+
+    /// Switches the design language. Every token set (colors, type, shapes, spacing,
+    /// elevation, motion) is replaced by the design's defaults; the mode, the seed and the
+    /// system preference are kept. Widgets re-skin in the next frame.
+    pub fn set_design(&mut self, design: WingsDesign) {
+        *self = Self::build(design, self.seed, self.mode, self.system_prefers_dark);
     }
 
     /// Builder: sets the mode.
@@ -164,5 +250,28 @@ mod tests {
             t.light.get(ColorRole::Primary),
             WingsTheme::default().light.get(ColorRole::Primary)
         );
+    }
+
+    /// The default theme uses the native design.
+    #[test]
+    fn default_is_native() {
+        assert_eq!(WingsTheme::default().design, WingsDesign::native());
+        assert_eq!(WingsTheme::material().design, WingsDesign::Material);
+    }
+
+    /// Switching the design swaps tokens and keeps mode and seed.
+    #[test]
+    fn set_design_keeps_mode_and_seed() {
+        let seed = Color::srgb(0.9, 0.1, 0.4);
+        let mut t = WingsTheme::material().with_mode(WingsThemeMode::Dark);
+        t.seed = Some(seed);
+        t.set_design(WingsDesign::Ios);
+        assert_eq!(t.design, WingsDesign::Ios);
+        assert_eq!(t.mode, WingsThemeMode::Dark);
+        assert_eq!(t.seed, Some(seed));
+        assert_eq!(t.typography, WingsTypography::ios());
+        assert_eq!(t.light.get(ColorRole::Primary), seed);
+        t.set_design(WingsDesign::Material);
+        assert_eq!(t.typography, WingsTypography::default());
     }
 }

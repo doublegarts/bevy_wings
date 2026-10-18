@@ -81,22 +81,23 @@ runtime reapplies the chain. `Children [...]` describes the hierarchy.
 4. [Domain layer](#domain-layer)
 5. [Data layer](#data-layer)
 6. [Widgets](#widgets)
-7. [Theming: the ECS theme](#theming-the-ecs-theme)
-8. [Animation](#animation)
-9. [Responsiveness](#responsiveness)
-10. [Modifiers](#modifiers)
-11. [Custom UI shaders](#custom-ui-shaders)
-12. [Navigation](#navigation)
-13. [Dependency injection](#dependency-injection)
-14. [MVVM](#mvvm)
-15. [Frame order](#frame-order)
-16. [Performance notes](#performance-notes)
-17. [Testing](#testing)
-18. [Gallery example](#gallery-example)
-19. [Focused examples](#focused-examples)
-20. [CI and crates.io releases](#ci-and-cratesio-releases)
-21. [Roadmap](#roadmap)
-22. [License](#license)
+7. [Designs: Material, Cupertino and Fluent](#designs-material-cupertino-and-fluent)
+8. [Theming: the ECS theme](#theming-the-ecs-theme)
+9. [Animation](#animation)
+10. [Responsiveness](#responsiveness)
+11. [Modifiers](#modifiers)
+12. [Custom UI shaders](#custom-ui-shaders)
+13. [Navigation](#navigation)
+14. [Dependency injection](#dependency-injection)
+15. [MVVM](#mvvm)
+16. [Frame order](#frame-order)
+17. [Performance notes](#performance-notes)
+18. [Testing](#testing)
+19. [Gallery example](#gallery-example)
+20. [Focused examples](#focused-examples)
+21. [CI and crates.io releases](#ci-and-cratesio-releases)
+22. [Roadmap](#roadmap)
+23. [License](#license)
 
 ---
 
@@ -108,6 +109,13 @@ runtime reapplies the chain. `Children [...]` describes the hierarchy.
 * **Background loading in the ECS.** `commands.entity(screen).load(move || use_case.execute(()))`
   runs work on Bevy's async compute pool and stores a `Loadable<T>` component that keeps the
   previous value while refreshing.
+* **The platform's own look.** One widget API, four designs: Material (Android, Linux),
+  Cupertino with Liquid Glass (iOS, iPadOS, macOS, measured against SwiftUI on iOS 27 and
+  macOS 27) and Fluent (Windows). `wings.toml` picks the platform's design or your own custom
+  design, identical everywhere; the design can also change at runtime.
+* **Safe areas everywhere.** Notches, the Dynamic Island, home indicators, Android gesture and
+  status bars, foldable hinges, the keyboard and macOS title bars pad the scaffold by
+  themselves, with device previews for every screen type on the desktop.
 * **Widgets as scene components.** `@WingsButton { @text: "Save" }` spawns a fully themed,
   keyboard accessible button. Widgets are ordinary entities, so you can query, mutate, add
   components to, or despawn any part of them.
@@ -125,18 +133,25 @@ runtime reapplies the chain. `Children [...]` describes the hierarchy.
 * **Modifiers.** A chainable `WingsModifier` (`.fill_max_width().padding(16.0).shape(...)`)
   that folds into Bevy UI components only when it changes.
 * **Custom UI shaders.** WESL materials for touch ripples, skeleton shimmer, circular progress,
-  animated aurora backgrounds and frosted glass panels, all anti aliased against rounded
-  corners.
+  animated aurora backgrounds, frosted glass, Liquid Glass over a blurred backdrop, gradient
+  borders and noise, all anti aliased against rounded corners.
+* **Large data.** Virtualized lists and grids keep only the visible rows: scrolling a list of
+  100,000 rows costs 0.03 ms per frame.
 * **Navigation.** A type safe back stack that is just a resource holding your own enum.
   Destinations are `bsn!` scenes, entries below the top stay alive (their state survives),
   transitions are animated, and list and detail panes appear side by side on wide windows.
+  Destinations return results, deep links open whole stacks, the stack can be saved and
+  restored, and shared elements move between screens.
+* **Input for everyone.** Keyboard focus rings per design, gamepad navigation (D-pad, stick,
+  A to activate, B to go back) and right to left layouts.
 * **Dependency injection.** Modules with singletons, factories, scoped definitions,
   parameterized factories, named qualifiers, trait bindings, cycle detection and an `Inject`
   system parameter. Every navigation entry gets its own scope.
 * **MVVM.** View models are components; Bevy change detection is the reactivity. Bindings
   update text, visibility, enabled and checked states, or any component, only when the view
   model changed. Intents and one shot effects round it off.
-* **Tested.** About 200 documented unit and integration tests run headless.
+* **Tested.** About 300 documented unit and integration tests run headless, stress benchmarks
+  cover tens of thousands of widgets, and screenshot tests compare every design on a GPU.
 
 ---
 
@@ -145,18 +160,18 @@ runtime reapplies the chain. `Children [...]` describes the hierarchy.
 | Folder | Crate | What it contains |
 | --- | --- | --- |
 | `/` | `bevy_wings` | Facade: re-exports every crate, `WingsUiPlugins`, one `prelude` |
-| `crates/domain` | `bevy_wings_domain` | Entities, `Id<T>`, use cases, validation, repository traits, paging, `Loadable` |
-| `crates/data` | `bevy_wings_data` | Data sources, offline first repositories, caching, mappers, background loads |
+| `crates/domain` | `bevy_wings_domain` | Entities, `Id<T>`, use cases and pipelines (retry, timeout, logging), validation, repository traits, paging, `Loadable` |
+| `crates/data` | `bevy_wings_data` | Data sources (memory, JSON file, embedded database), HTTP remote, offline first repositories, caching, mappers, background loads |
 | `crates/shared` | `bevy_wings_di` | Dependency injection container, modules and scopes |
 | `crates/presentation` | `bevy_wings_ui_core` | `WingsUiSystems` sets, `WingsState`, `WingsMemo`, `WingsOpacity`, hierarchy helpers |
 | `crates/presentation` | `bevy_wings_ui_animation` | Easing, tweens, springs, keyframes, property animators, animated visibility |
-| `crates/presentation` | `bevy_wings_ui_theme` | Color schemes (seeded), typography, shapes, spacing, elevation, motion, the painter |
-| `crates/presentation` | `bevy_wings_ui_responsive` | Breakpoints, viewport, responsive nodes, visibility, columns, auto scale |
+| `crates/presentation` | `bevy_wings_ui_theme` | Designs, color schemes (seeded, Apple, Fluent), typography, shapes, spacing, elevation, motion, the painter, `wings.toml`, theme files |
+| `crates/presentation` | `bevy_wings_ui_responsive` | Breakpoints, viewport, safe areas, device previews, right to left, responsive nodes, visibility, columns, auto scale |
 | `crates/presentation` | `bevy_wings_ui_modifiers` | `WingsModifier` chains and hover scale |
-| `crates/presentation` | `bevy_wings_ui_shaders` | WESL UI materials: ripple, shimmer, circular progress, aurora, glass |
+| `crates/presentation` | `bevy_wings_ui_shaders` | WESL UI materials: ripple, shimmer, circular progress, aurora, glass, Liquid Glass with backdrop blur, gradient border, noise |
 | `crates/presentation` | `bevy_wings_ui_widgets` | All `Wings*` widgets |
-| `crates/presentation` | `bevy_wings_ui_mvvm` | View models, bindings, intents, effects |
-| `crates/presentation` | `bevy_wings_ui_navigation` | Back stack, navigation graph and display, adaptive panes |
+| `crates/presentation` | `bevy_wings_ui_mvvm` | View models, bindings (including `Loadable` bindings), intents, effects |
+| `crates/presentation` | `bevy_wings_ui_navigation` | Back stack, navigation graph and display, adaptive panes, results, deep links, saved stacks, shared elements |
 | `examples` | `wings-gallery` | A runnable gallery app using all three layers |
 
 The package name and Rust import path are both `bevy_wings`. All Wings library package names use underscores.
@@ -172,7 +187,7 @@ UI nodes.
 ```toml
 [dependencies]
 bevy = "0.20"
-bevy_wings = "0.1"
+bevy_wings = "0.2"
 ```
 
 For the development version, use `bevy_wings = { git = "https://github.com/doublegarts/bevy_wings" }`.
@@ -181,7 +196,10 @@ Cargo features of the facade:
 
 | Feature | Default | Effect |
 | --- | --- | --- |
-| `shaders` | yes | Custom WESL materials and the widgets that use them (ripple, circular progress, shimmer skeletons) |
+| `shaders` | yes | Custom WESL materials and the widgets that use them (ripple, circular progress, shimmer skeletons, Liquid Glass) |
+| `native` | yes | Reads safe areas from the platform (iOS, Android, macOS title bars) |
+| `database` | no | `DatabaseSource`, an embedded database data source (redb) |
+| `http` | no | `UreqClient`, a blocking HTTP client for `HttpRemote` (ureq) |
 
 Without `shaders`, skeletons fall back to an opacity pulse and the circular progress widget is
 not available. Apps without a renderer (servers, tests) can also keep the feature and use
@@ -243,6 +261,10 @@ impl UseCase for CompleteTodo {
 | `ReadRepository<T>`, `WriteRepository<T>` | Contracts with default `page` and `require` methods |
 | `PageRequest`, `Page<T>` | Paging helpers |
 | `Loadable<T>` | Idle, loading, ready or failed, keeping the previous value while loading or after a failure |
+| `UseCaseExt` | Pipelines that decorate any use case: `.retry(RetryPolicy::times(3).with_backoff(..))`, `.timeout(..)`, `.logged(name, sink)`, `.map(..)` |
+
+With the `serde` feature, `Id<T>`, `Page<T>` and `PageRequest` serialize, so entities that
+derive `Serialize` and `Deserialize` can be persisted by the data layer.
 
 ---
 
@@ -268,8 +290,14 @@ let module = WingsModule::new("data")
   * `RemoteFirst`, `CacheOnly` and `RemoteOnly` cover the other common strategies.
   * Writes apply locally at once and are pushed to the remote. Offline writes are queued and
     `sync()` delivers them in order.
-* **`DataSource<K, V>`** is the local storage contract; `MemorySource` is a thread safe ordered
-  implementation. Plug in files or databases by implementing the trait.
+* **`DataSource<K, V>`** is the local storage contract. `MemorySource` is a thread safe ordered
+  implementation, `FileSource` keeps entities in a JSON file written atomically (through any
+  `Codec`, `JsonCodec` by default) and `DatabaseSource` stores them in an embedded database
+  (feature `database`; `WingsDatabase::open(path)?.source("todos")`).
+* **`HttpRemote<T>`** implements `RemoteSource<T>` over a REST resource (`GET /todos`,
+  `GET /todos/{id}`, `PUT`, `DELETE`). It talks to any `WingsHttpClient`, which a closure can
+  implement in tests; the `http` feature adds `UreqClient`. HTTP errors map to domain errors
+  (404 is not found, 409 conflict, 5xx unavailable and therefore retried).
 * **`RemoteSource<T>`** is the backend contract; `FakeRemote<T>` can be switched offline and
   counts calls, which makes caching behavior easy to test and to preview.
 * **`TtlCache`** with an injectable `Clock` (`SystemClock`, `ManualClock` for tests).
@@ -352,8 +380,21 @@ bsn! {
 | | `WingsNavigationBar` / `WingsNavigationRail` | responsive pair | `WingsNavigationSelected` |
 | | `WingsNavigationItem` | `icon`, `label`, `selected` | |
 | | `WingsListItem` | `headline`, `supporting`, `icon` | `Activate` |
+| | `WingsVirtualList`, `WingsVirtualGrid` | `count`, `row_height`, `columns`, row builder; only visible rows exist | |
+| Choice | `WingsSegmented`, `WingsTabs` | `options`, `selected` | `WingsSegmentChanged` |
+| | `WingsDropdown` | `options`, `selected` | `WingsMenuSelected` |
+| | `WingsMenuButton` | `label`, `icon`, `items`, `variant` | `WingsMenuSelected` |
+| | `WingsTooltip` | component: text shown after hovering | |
+| | `WingsDatePicker` | `date`, `monday_first` (month grid with steppers) | `WingsDateChanged` |
+| | `WingsTimePicker` | `hour`, `minute`, `h24` | `WingsTimeChanged` |
+| Sheets | `WingsBottomSheet`, `WingsSideSheet` | `title`, `open`, `detent` | `WingsSheetDismissed` |
 
 `WingsCheckbox` traces its check mark from the starting point through the corner to the tip over 220 ms. Unchecking erases the stroke in reverse. The mark is drawn with UI geometry and follows the theme. `WingsSlider` supports both dragging the thumb and clicking the track to move directly to that position.
+
+Keyboard focus shows a focus ring in the design's style (`WingsNoFocusRing` opts out). Every
+interactive widget also joins directional navigation: the D-pad, the left stick and the arrow
+keys move focus, A (South) activates and B (East) closes popups and sheets and pops the
+navigation stack (`WingsGamepadNavigation` configures it).
 
 ### Button variants
 
@@ -390,6 +431,71 @@ All controls build on Bevy's headless widgets, so they get `TabIndex` focus, Ent
 activation and accessibility roles. Text fields highlight their outline while focused.
 
 ---
+
+## Designs: Material, Cupertino and Fluent
+
+Every widget has one API and several looks. `WingsTheme::design` selects the look, and the
+skin systems restyle existing widgets when it changes, so `theme.set_design(WingsDesign::Ios)`
+switches a running app.
+
+| Design | Default on | Notes |
+| --- | --- | --- |
+| `Material` | Android, Linux | Material 3 with seeded tonal palettes |
+| `Ios` | iOS, iPadOS | iOS 26+ with Liquid Glass bars, large titles, inset grouped lists, the San Francisco system font |
+| `Macos` | macOS | macOS 26+ controls, sidebar, unified title bar |
+| `Fluent` | Windows | Fluent 2 controls and type ramp, Segoe UI Variable when the system has it, accent from `accent` |
+
+In narrow windows the macOS sidebar and the Fluent navigation pane collapse to their icons.
+
+`Cupertino` resolves to `Ios` or `Macos` for the running platform. The Apple designs were
+measured against a SwiftUI reference app (`tools/swiftui-reference`): colors, type sizes,
+control sizes, list rows, tab bar and alerts. Wings never bundles Apple fonts; on Apple
+platforms the system font is used.
+
+### `wings.toml`
+
+Put a `wings.toml` next to your app's `Cargo.toml` and embed it at compile time, so it also
+travels inside iOS and Android packages:
+
+```toml
+# "system": Material on Android and Linux, Fluent on Windows, Cupertino on iOS and macOS.
+# "custom": the design below, identical on every platform.
+ui = "system"
+appearance = "system"   # light, dark or system
+accent = "#3D59FC"      # optional brand color
+
+[custom]
+design = "material"     # skin the custom design starts from
+font_family = "Brand Sans"
+font_scale = 1.0
+radii = [0, 6, 10, 14, 20, 28]
+spacing = [4, 8, 16, 24, 32]
+
+[custom.light]          # any color role by its snake_case name
+primary = "#3D59FC"
+```
+
+```rust
+app.add_plugins(WingsUiPlugins::configured(wings_config!()));
+```
+
+### Theme files with hot reload
+
+A `.wings.toml` asset has the same format. Load it with `WingsThemeFilePlugin` and the theme
+follows the file; with Bevy's `file_watcher` feature, saving the file restyles the running
+app (a runtime light or dark switch is kept unless the file changes `appearance`):
+
+```rust
+app.add_plugins(WingsThemeFilePlugin::new("themes/brand.wings.toml"));
+```
+
+### Liquid Glass
+
+On iOS the top bar, tab bar, sheets and menus float over the content as Liquid Glass. The
+content keeps scrolling underneath: an overlay camera draws the floating chrome, a render
+pass blurs what lies below it (dual Kawase blur at half and quarter resolution) and
+`WingsLiquidGlassMaterial` refracts that blur with a rim light. Without the `shaders` feature
+the glass falls back to a translucent material color. `WingsGlass` puts any node on glass.
 
 ## Theming: the ECS theme
 
@@ -529,6 +635,24 @@ commands.spawn((
 * `width_at_least(WidthClass::Expanded)` is a run condition, and `WidthClassChanged` is a
   message.
 
+### Safe areas and device previews
+
+`WingsSafeArea` holds the insets of the screen: notches and the Dynamic Island, home
+indicators, Android status, navigation and gesture bars, display cutouts, foldable hinges,
+the on screen keyboard and the macOS title bar. The `native` feature reads them from the
+platform. Scaffolds apply them by themselves (bars grow under the system bars, the content
+stays clear), and `WingsSafeAreaPadding` pads any node.
+
+On the desktop, `WingsDevicePreview::new(WingsDeviceProfile::IPHONE_PRO)` (or iPad, Android
+phones, foldables, tablets, TVs, landscape variants) previews a device: its size, insets and
+keyboard. The gallery takes `WINGS_DEVICE=iphone`.
+
+### Right to left
+
+`WingsLayoutDirection::RightToLeft` (or `WingsLayoutDirection::for_language("ar")`) mirrors
+the whole UI: rows, alignment, padding and icons, while text and images stay readable.
+`WingsNoMirror` keeps any subtree as it is.
+
 ---
 
 ## Modifiers
@@ -565,6 +689,9 @@ All shaders are WESL files embedded in the binary and registered by `WingsShader
 | `WingsCircularProgressMaterial` | Anti aliased arc, determinate or rotating indeterminate |
 | `WingsAuroraMaterial` | Animated three color aurora background |
 | `WingsGlassMaterial` | Frosted glass panel with grain and a lit edge |
+| `WingsLiquidGlassMaterial` | Liquid Glass: the blurred backdrop refracted at the edges, with a rim light |
+| `WingsGradientBorderMaterial` | A seamless angular gradient border, still or turning; as wide as the node's `border` |
+| `WingsNoiseMaterial` | Animated fractal noise: clouds, smoke, paper or film grain |
 
 ```rust
 fn spawn_aurora(mut commands: Commands, mut materials: ResMut<Assets<WingsAuroraMaterial>>) {
@@ -623,6 +750,21 @@ fn open_message(mut stack: ResMut<WingsBackStack<Screen>>) {
   with `without_back_input()`).
 * Each entry root carries a `WingsDiScope`, so scoped dependencies live exactly as long as the
   entry.
+* Back input also includes the gamepad East button. Unless a display sets its own transitions, they
+  follow the design: iOS pushes with a parallax slide, macOS cross fades, Fluent slides up a
+  short entrance and Material slides.
+* **Results:** `WingsNavigator<K>::pop_with_result(value)` returns a value to the destination
+  below, which receives `WingsNavResultReceived` on its entry root and a
+  `WingsNavResultMessage<K>`.
+* **Deep links:** `WingsDeepLinks::<K>::new().route("/notes/:id", |p| ...)` maps links such as
+  `myapp://notes/42` or `https://example.com/notes/42` to whole back stacks. Send
+  `WingsOpenDeepLink`; links on the command line open at startup.
+* **Saved stacks:** `WingsBackStackPersistencePlugin::<K>` saves the stack (keys implementing
+  `Serialize` and `Deserialize`) to a `WingsStateStore` (`WingsFileStore`, `WingsMemoryStore`)
+  and restores it on the next launch.
+* **Shared elements:** tag an element on two destinations with the same
+  `WingsSharedElement::new("note-42")` and it moves and resizes between them, like SwiftUI's
+  `matchedGeometryEffect`.
 
 ---
 
@@ -715,6 +857,9 @@ fn counter_screen() -> impl Scene {
 * **Bindings:** `bind_text`, `bind_visible`, `bind_enabled`, `bind_checked` and the generic
   `bind::<VM, C>` (register with `register_binding`). Each finds the closest view model of its
   type up the hierarchy, recomputes only when it changed and writes only differing values.
+* **Loadable bindings:** `bind_loading`, `bind_refreshing`, `bind_loaded`, `bind_failed` and
+  `bind_error_text` show spinners, content and errors from a `Loadable<T>` field of the view
+  model (`WingsLoadPhase::of` names the phase).
 * **Intents:** `on_activate` and `on_vm::<VM, E>` turn widget events into view model calls.
 * **Effects:** `WingsEffects<E>` queues one shot events that are drained into Bevy messages.
 * **Lifecycle:** `WingsViewModel::on_cleared` runs when the screen is despawned. Inside a
@@ -727,10 +872,11 @@ fn counter_screen() -> impl Scene {
 All Wings systems run in `Update`, in chained `WingsUiSystems` sets:
 
 ```
-Input -> ViewModel -> Bind -> Navigation -> Responsive -> Modifier -> Style -> Theme -> Animate
+Input -> ViewModel -> Bind -> Navigation -> Responsive -> Skin -> Modifier -> Style -> Theme -> Animate
 ```
 
-Your own systems can be ordered against these sets. For example, put game logic that mutates
+`Skin` restyles widgets for the current design (only new widgets, or all of them when the
+design changes). Your own systems can be ordered against these sets. For example, put game logic that mutates
 view models in `WingsUiSystems::ViewModel` and the bindings refresh in the same frame.
 
 ---
@@ -745,6 +891,19 @@ view models in `WingsUiSystems::ViewModel` and the bindings refresh in the same 
 * Hidden navigation entries and animated visibility end in `Display::None`, removing them from
   layout.
 * Shader effects are plain `MaterialNode`s; ripples despawn themselves after their fade.
+* Virtual lists spawn only the rows in view.
+
+`cargo bench -p bevy_wings_ui_widgets --bench stress` measures large widget counts headless
+(release build, Apple M1 Max):
+
+| Case | 1,000 widgets | 10,000 widgets |
+| --- | --- | --- |
+| Spawn from `bsn!` (plus two frames) | 9.2 ms | 104 ms |
+| Idle frame | 0.04 ms | 0.20 ms |
+| Light and dark switch | 0.19 ms | 2.1 ms |
+| Material to iOS re-skin | 3.9 ms | 52 ms |
+
+A virtual list of 100,000 rows takes 0.03 ms per scrolling frame.
 
 ---
 
@@ -773,6 +932,14 @@ cargo test --workspace --exclude wings-gallery --doc --no-default-features --loc
 
 The gallery is excluded here because its facade dependency enables shaders by default.
 
+### Screenshot tests
+
+`scripts/visual-regression.py` renders the gallery in every design, light and dark, at desktop
+and phone sizes, offscreen on a real GPU with a fixed frame time, and compares the screenshots with the
+baselines in `tests/visual/<platform>/` (changed pixels are drawn red in `target/visual/diff`).
+The `Visual regression` workflow runs it on a macOS runner; `--update` accepts new baselines.
+See [tests/visual/README.md](tests/visual/README.md).
+
 ---
 
 ## Gallery example
@@ -786,6 +953,19 @@ selection controls, a text field, progress indicators, skeletons, a dialog, snac
 navigation bar that becomes a rail on wide windows, a DI provided MVVM counter and a Notes
 screen that loads data through a domain use case and an offline first repository. On Linux
 the example enables X11 only.
+
+The button in the top bar cycles through the designs. Environment variables help with
+previews and tests:
+
+| Variable | Effect |
+| --- | --- |
+| `WINGS_DESIGN=ios` | start in a design (`material`, `ios`, `macos`, `fluent`) |
+| `WINGS_DARK=1` | start dark |
+| `WINGS_DEVICE=iphone` | preview a device (`ipad`, `android`, `foldable`, `tv`, `-landscape`) |
+| `WINGS_SCREEN=controls` | start on another screen |
+| `WINGS_WINDOW=402x874`, `WINGS_SCALE=1` | window size and scale factor |
+| `WINGS_THEME_FILE=themes/brand.wings.toml` | follow a theme file (edit it while running) |
+| `WINGS_CAPTURE=shot.png` | render offscreen (hidden window), save a screenshot at frame `WINGS_CAPTURE_FRAME` and exit |
 
 ---
 
@@ -878,8 +1058,8 @@ inspect the workflow log and registry before retrying to confirm which packages 
 
 ## Roadmap
 
-See [VERSION_0_1.MD](VERSION_0_1.MD) for the full feature and task checklist of this release and
-what is planned next.
+See [VERSION_0_2.MD](VERSION_0_2.MD) for this release's checklist and what is planned next, and
+[VERSION_0_1.MD](VERSION_0_1.MD) for the first release.
 
 ---
 

@@ -34,10 +34,11 @@ pub use state::{WingsMemo, WingsState};
 /// 3. [`WingsUiSystems::Bind`]: push view model state into bound widgets.
 /// 4. [`WingsUiSystems::Navigation`]: react to back stack changes and spawn or hide screens.
 /// 5. [`WingsUiSystems::Responsive`]: compute window size classes and responsive values.
-/// 6. [`WingsUiSystems::Modifier`]: fold modifier chains into Bevy UI components.
-/// 7. [`WingsUiSystems::Style`]: widgets compute their state dependent paint (hover, pressed).
-/// 8. [`WingsUiSystems::Theme`]: resolve theme roles into concrete colors.
-/// 9. [`WingsUiSystems::Animate`]: advance tweens and springs and write animated values.
+/// 6. [`WingsUiSystems::Skin`]: widgets apply the active design's metrics and parts.
+/// 7. [`WingsUiSystems::Modifier`]: fold modifier chains into Bevy UI components.
+/// 8. [`WingsUiSystems::Style`]: widgets compute their state dependent paint (hover, pressed).
+/// 9. [`WingsUiSystems::Theme`]: resolve theme roles into concrete colors.
+/// 10. [`WingsUiSystems::Animate`]: advance tweens and springs and write animated values.
 ///
 /// User systems can be ordered relative to these sets, for example
 /// `app.add_systems(Update, my_system.in_set(WingsUiSystems::ViewModel))`.
@@ -53,6 +54,8 @@ pub enum WingsUiSystems {
     Navigation,
     /// Responsive layout evaluation.
     Responsive,
+    /// Design skins (Material, iOS, macOS) for newly spawned widgets and design changes.
+    Skin,
     /// Modifier application.
     Modifier,
     /// Widget state styling.
@@ -65,12 +68,13 @@ pub enum WingsUiSystems {
 
 impl WingsUiSystems {
     /// All sets in execution order.
-    pub const ORDER: [WingsUiSystems; 9] = [
+    pub const ORDER: [WingsUiSystems; 10] = [
         WingsUiSystems::Input,
         WingsUiSystems::ViewModel,
         WingsUiSystems::Bind,
         WingsUiSystems::Navigation,
         WingsUiSystems::Responsive,
+        WingsUiSystems::Skin,
         WingsUiSystems::Modifier,
         WingsUiSystems::Style,
         WingsUiSystems::Theme,
@@ -93,6 +97,7 @@ impl Plugin for WingsCorePlugin {
                 WingsUiSystems::Bind,
                 WingsUiSystems::Navigation,
                 WingsUiSystems::Responsive,
+                WingsUiSystems::Skin,
                 WingsUiSystems::Modifier,
                 WingsUiSystems::Style,
                 WingsUiSystems::Theme,
@@ -168,6 +173,6 @@ mod tests {
         for s in WingsUiSystems::ORDER {
             assert!(seen.insert(s));
         }
-        assert_eq!(seen.len(), 9);
+        assert_eq!(seen.len(), 10);
     }
 }

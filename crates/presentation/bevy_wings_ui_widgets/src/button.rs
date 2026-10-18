@@ -13,6 +13,17 @@
 //!
 //! Colors are never hard coded: [`WingsButtonVariant`] maps to theme roles, so every button
 //! follows light, dark and seeded schemes, and a theme switch repaints them all at once.
+//!
+//! The variants map to the platform's own button styles in the Apple designs:
+//!
+//! | Variant | Material | iOS | macOS | Fluent |
+//! | --- | --- | --- | --- | --- |
+//! | Filled | filled | `.borderedProminent` | accent push button | accent button |
+//! | Tonal | tonal | tinted `.bordered` | push button | accent tinted button |
+//! | Outlined | outlined | `.bordered` | push button with a hairline | standard button |
+//! | Text | text | `.borderless` | borderless | hyperlink button |
+//! | Elevated | elevated | `.glass` | glass | standard button with a shadow |
+//! | Danger | error fill | destructive prominent | destructive | critical fill |
 
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::picking::cursor::EntityCursor;
@@ -23,11 +34,12 @@ use bevy::window::SystemCursorIcon;
 
 use bevy_wings_ui_theme::prelude::{
     ColorRole, ShapeRole, TypeRole, WingsBackground, WingsBorderPaint, WingsContentColor,
-    WingsElevationLevel, WingsPaint, WingsShape, WingsStateLayer,
+    WingsDesign, WingsElevationLevel, WingsPaint, WingsShape, WingsStateLayer,
 };
 
 use crate::interaction::WingsInteractive;
-use crate::text::{WingsIcon, WingsText};
+use crate::skin::{WingsSkin, skin_targets};
+use crate::text::{WingsIcon, WingsIconTint, WingsText};
 
 /// Visual emphasis of a button. Also the marker the styling system uses to find buttons.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
@@ -61,7 +73,57 @@ pub struct WingsButtonPalette {
 }
 
 impl WingsButtonVariant {
-    /// Returns the theme roles of this variant.
+    /// Returns the theme roles of this variant in a design.
+    pub fn palette_for(self, design: WingsDesign) -> WingsButtonPalette {
+        use ColorRole::*;
+        let p = |container, content, border, elevation| WingsButtonPalette {
+            container,
+            content,
+            border,
+            elevation,
+        };
+        let t = WingsPaint::Transparent;
+        match (design, self) {
+            (WingsDesign::Material, _) => self.palette(),
+            (WingsDesign::Fluent, Self::Tonal) => {
+                p(WingsPaint::Role(PrimaryContainer), OnPrimaryContainer, t, 0)
+            }
+            (WingsDesign::Fluent, Self::Outlined) => p(
+                WingsPaint::Role(SurfaceContainerLowest),
+                OnSurface,
+                WingsPaint::Role(OutlineVariant),
+                0,
+            ),
+            (WingsDesign::Fluent, Self::Elevated) => p(
+                WingsPaint::Role(SurfaceContainerLowest),
+                OnSurface,
+                WingsPaint::Role(OutlineVariant),
+                1,
+            ),
+            (_, Self::Filled) => p(WingsPaint::Role(Primary), OnPrimary, t, 0),
+            (_, Self::Danger) => p(WingsPaint::Role(Error), OnError, t, 0),
+            (_, Self::Text) => p(t, Primary, t, 0),
+            (_, Self::Elevated) => p(
+                WingsPaint::Role(SurfaceContainerLowest),
+                OnSurface,
+                WingsPaint::Role(OutlineVariant),
+                2,
+            ),
+            (WingsDesign::Ios, Self::Tonal) => {
+                p(WingsPaint::Role(PrimaryContainer), OnPrimaryContainer, t, 0)
+            }
+            (WingsDesign::Ios, Self::Outlined) => p(WingsPaint::Role(SecondaryFill), Primary, t, 0),
+            (_, Self::Tonal) => p(WingsPaint::Role(SecondaryFill), OnSurface, t, 0),
+            (_, Self::Outlined) => p(
+                WingsPaint::Role(SurfaceContainerLowest),
+                OnSurface,
+                WingsPaint::Role(Outline),
+                1,
+            ),
+        }
+    }
+
+    /// Returns the theme roles of this variant in the Material design.
     pub fn palette(self) -> WingsButtonPalette {
         use ColorRole::*;
         let (container, content, border, elevation) = match self {
@@ -293,6 +355,10 @@ impl WingsFabSize {
 #[derive(Component, Debug, Default, Clone, Copy)]
 pub struct WingsFabMarker;
 
+/// Edge length of a floating action button in the Material design.
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsFabEdge(pub f32);
+
 /// Floating action button: the primary action of a screen.
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WingsFabProps)]
@@ -340,9 +406,11 @@ impl WingsFab {
             Box::new(bsn! {})
         };
         let interactive = clickable(true);
+        let fab_edge = WingsFabEdge(edge);
         bsn! {
             node
             WingsFabMarker
+            fab_edge
             WingsShape(ShapeRole::Large)
             WingsBackground({WingsPaint::Role(ColorRole::PrimaryContainer)})
             WingsContentColor({WingsPaint::Role(ColorRole::OnPrimaryContainer)})
@@ -354,39 +422,230 @@ impl WingsFab {
     }
 }
 
-/// Applies the palette of changed [`WingsButtonVariant`]s.
-pub fn button_variant_system(
-    mut buttons: Query<
-        (
-            &WingsButtonVariant,
-            &mut WingsBackground,
-            &mut WingsContentColor,
-            &mut WingsBorderPaint,
-            &mut WingsElevationLevel,
-            &mut WingsStateLayer,
-        ),
-        Changed<WingsButtonVariant>,
-    >,
-) {
-    for (variant, mut bg, mut content, mut border, mut elevation, mut layer) in &mut buttons {
-        let p = variant.palette();
-        bg.set_if_neq(WingsBackground(p.container));
-        content.set_if_neq(WingsContentColor(WingsPaint::Role(p.content)));
-        border.set_if_neq(WingsBorderPaint(p.border));
-        elevation.set_if_neq(WingsElevationLevel(p.elevation));
-        let layer_color = WingsPaint::Role(p.content);
-        if layer.color != layer_color {
-            layer.color = layer_color;
+/// Adjusts what the active skin gives a button. Dialogs use it for their platform style
+/// action buttons.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Default)]
+pub struct WingsButtonOverride {
+    /// Palette instead of the variant's.
+    pub palette: Option<WingsButtonPalette>,
+    /// Minimum height instead of the design's.
+    pub min_height: Option<f32>,
+    /// Share the available width with sibling buttons.
+    pub grow: bool,
+}
+
+/// Sizes of a push button in a design.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WingsButtonMetrics {
+    /// Minimum height.
+    pub height: f32,
+    /// Horizontal padding.
+    pub padding: f32,
+    /// Horizontal padding of text only buttons.
+    pub text_padding: f32,
+    /// Corner shape.
+    pub shape: ShapeRole,
+    /// Gap between icon and label.
+    pub gap: f32,
+    /// Edge length of an icon button.
+    pub icon_button: f32,
+    /// Icon size inside an icon button.
+    pub icon: f32,
+}
+
+impl WingsButtonMetrics {
+    /// Metrics of a design (iOS and macOS values measured on SwiftUI 27).
+    pub fn for_design(design: WingsDesign) -> Self {
+        match design {
+            WingsDesign::Material => Self {
+                height: 40.0,
+                padding: 24.0,
+                text_padding: 12.0,
+                shape: ShapeRole::Full,
+                gap: 8.0,
+                icon_button: 40.0,
+                icon: 24.0,
+            },
+            WingsDesign::Ios => Self {
+                height: 34.0,
+                padding: 14.0,
+                text_padding: 4.0,
+                shape: ShapeRole::Full,
+                gap: 6.0,
+                icon_button: 44.0,
+                icon: 22.0,
+            },
+            WingsDesign::MacOs => Self {
+                height: 24.0,
+                padding: 12.0,
+                text_padding: 4.0,
+                shape: ShapeRole::Small,
+                gap: 4.0,
+                icon_button: 28.0,
+                icon: 16.0,
+            },
+            WingsDesign::Fluent => Self {
+                height: 32.0,
+                padding: 12.0,
+                text_padding: 8.0,
+                shape: ShapeRole::Small,
+                gap: 8.0,
+                icon_button: 32.0,
+                icon: 16.0,
+            },
         }
     }
 }
 
-/// Uses the content color for the FAB state layer.
-pub fn fab_state_layer_system(
-    mut fabs: Query<&mut WingsStateLayer, (With<WingsFabMarker>, Added<WingsFabMarker>)>,
+type ButtonParts<'a> = (
+    &'a WingsButtonVariant,
+    Option<&'a WingsButtonOverride>,
+    Has<WingsIconButton>,
+    Has<WingsButton>,
+    &'a mut Node,
+    &'a mut WingsShape,
+    &'a mut WingsBackground,
+    &'a mut WingsContentColor,
+    &'a mut WingsBorderPaint,
+    &'a mut WingsElevationLevel,
+    &'a mut WingsStateLayer,
+);
+
+/// Skins buttons and icon buttons: applies the palette of their variant in the active design
+/// and the design's sizes. Runs for new buttons, changed variants and design changes.
+pub fn button_variant_system(
+    mut commands: Commands,
+    skin: Res<WingsSkin>,
+    added: Query<
+        Entity,
+        Or<(
+            Added<WingsButtonVariant>,
+            Changed<WingsButtonVariant>,
+            Changed<WingsButtonOverride>,
+        )>,
+    >,
+    all: Query<Entity, With<WingsButtonVariant>>,
+    mut buttons: Query<ButtonParts>,
+    children: Query<&Children>,
+    mut icons: Query<&mut Node, (With<WingsIconTint>, Without<WingsButtonVariant>)>,
 ) {
-    for mut layer in &mut fabs {
-        layer.color = WingsPaint::Role(ColorRole::OnPrimaryContainer);
+    let metrics = WingsButtonMetrics::for_design(skin.design);
+    for entity in skin_targets(&skin, added, all) {
+        let Ok((
+            variant,
+            palette_override,
+            icon_button,
+            push_button,
+            mut node,
+            mut shape,
+            mut bg,
+            mut content,
+            mut border,
+            mut elevation,
+            mut layer,
+        )) = buttons.get_mut(entity)
+        else {
+            continue;
+        };
+        let adjust = palette_override.copied().unwrap_or_default();
+        let p = adjust
+            .palette
+            .unwrap_or_else(|| variant.palette_for(skin.design));
+        bg.set_if_neq(WingsBackground(p.container));
+        content.set_if_neq(WingsContentColor(WingsPaint::Role(p.content)));
+        border.set_if_neq(WingsBorderPaint(p.border));
+        elevation.set_if_neq(WingsElevationLevel(p.elevation));
+        let layer_color = if skin.design == WingsDesign::MacOs {
+            WingsPaint::Role(ColorRole::Shadow)
+        } else {
+            WingsPaint::Role(p.content)
+        };
+        if layer.color != layer_color {
+            layer.color = layer_color;
+        }
+        // Apple glass buttons and their translucent fallback.
+        if skin.design.is_apple()
+            && *variant == WingsButtonVariant::Elevated
+            && adjust.palette.is_none()
+        {
+            commands.entity(entity).insert(
+                crate::glass::WingsGlass::new(crate::glass::WingsGlassStyle::Regular).interactive(),
+            );
+        } else {
+            commands.entity(entity).remove::<crate::glass::WingsGlass>();
+        }
+        if push_button {
+            let pad = if *variant == WingsButtonVariant::Text {
+                metrics.text_padding
+            } else {
+                metrics.padding
+            };
+            node.min_height = px(adjust.min_height.unwrap_or(metrics.height));
+            node.padding = UiRect::horizontal(px(pad));
+            node.column_gap = px(metrics.gap);
+            node.flex_grow = if adjust.grow { 1.0 } else { 0.0 };
+            node.flex_basis = if adjust.grow { px(0) } else { Val::Auto };
+            shape.set_if_neq(WingsShape(metrics.shape));
+        } else if icon_button {
+            let edge = px(metrics.icon_button);
+            node.width = edge;
+            node.height = edge;
+            shape.set_if_neq(WingsShape(if skin.design.is_desktop() {
+                ShapeRole::Small
+            } else {
+                ShapeRole::Full
+            }));
+            for child in children.iter_descendants(entity) {
+                if let Ok(mut icon) = icons.get_mut(child) {
+                    icon.width = px(metrics.icon);
+                    icon.height = px(metrics.icon);
+                }
+            }
+        }
+    }
+}
+
+/// Skins floating action buttons: a Material FAB, or a tinted glass circle in the Apple
+/// designs.
+pub fn fab_state_layer_system(
+    skin: Res<WingsSkin>,
+    added: Query<Entity, Added<WingsFabMarker>>,
+    all: Query<Entity, With<WingsFabMarker>>,
+    mut fabs: Query<(
+        &WingsFabEdge,
+        &mut Node,
+        &mut WingsShape,
+        &mut WingsBackground,
+        &mut WingsContentColor,
+        &mut WingsElevationLevel,
+        &mut WingsStateLayer,
+    )>,
+) {
+    for entity in skin_targets(&skin, added, all) {
+        let Ok((edge, mut node, mut shape, mut bg, mut content, mut elevation, mut layer)) =
+            fabs.get_mut(entity)
+        else {
+            continue;
+        };
+        let (container, on, shape_role) = if skin.apple() {
+            (ColorRole::Primary, ColorRole::OnPrimary, ShapeRole::Full)
+        } else if skin.fluent() {
+            (ColorRole::Primary, ColorRole::OnPrimary, ShapeRole::Large)
+        } else {
+            (
+                ColorRole::PrimaryContainer,
+                ColorRole::OnPrimaryContainer,
+                ShapeRole::Large,
+            )
+        };
+        let size = edge.0 * skin.pick(1.0, 1.0, 0.8, 0.86);
+        node.min_width = px(size);
+        node.height = px(size);
+        shape.set_if_neq(WingsShape(shape_role));
+        bg.set_if_neq(WingsBackground(WingsPaint::Role(container)));
+        content.set_if_neq(WingsContentColor(WingsPaint::Role(on)));
+        elevation.set_if_neq(WingsElevationLevel(if skin.apple() { 4 } else { 3 }));
+        layer.color = WingsPaint::Role(on);
     }
 }
 
@@ -423,6 +682,35 @@ mod tests {
             );
             assert_eq!(p.elevation > 0, v == WingsButtonVariant::Elevated);
         }
+    }
+
+    /// Apple palettes map the variants to the platform button styles.
+    #[test]
+    fn apple_palettes() {
+        let ios = |v: WingsButtonVariant| v.palette_for(WingsDesign::Ios);
+        assert_eq!(
+            ios(WingsButtonVariant::Filled).container,
+            WingsPaint::Role(ColorRole::Primary)
+        );
+        assert_eq!(
+            ios(WingsButtonVariant::Outlined).container,
+            WingsPaint::Role(ColorRole::SecondaryFill)
+        );
+        assert_eq!(ios(WingsButtonVariant::Text).content, ColorRole::Primary);
+        let mac = WingsButtonVariant::Tonal.palette_for(WingsDesign::MacOs);
+        assert_eq!(mac.content, ColorRole::OnSurface);
+        assert_eq!(
+            WingsButtonVariant::Filled.palette_for(WingsDesign::Material),
+            WingsButtonVariant::Filled.palette()
+        );
+        assert_eq!(
+            WingsButtonMetrics::for_design(WingsDesign::Ios).height,
+            34.0
+        );
+        assert_eq!(
+            WingsButtonMetrics::for_design(WingsDesign::MacOs).height,
+            24.0
+        );
     }
 
     /// `selected` maps toggles to filled and outlined.

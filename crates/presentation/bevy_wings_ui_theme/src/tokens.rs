@@ -1,10 +1,13 @@
 //! Design tokens other than color: typography, shapes, spacing, elevation and motion.
 
 use bevy::color::Color;
-use bevy::text::{FontSource, FontWeight};
+use bevy::text::{FontSource, FontWeight, GenericFontFamily};
 use bevy::ui::{BorderRadius, BoxShadow, ShadowStyle, Val};
 
-use bevy_wings_ui_animation::spec::AnimationSpec;
+use bevy_wings_ui_animation::easing::WingsEasing;
+use bevy_wings_ui_animation::spec::{AnimationSpec, SpringSpec};
+
+use crate::design::WingsDesign;
 
 /// One text style of the type scale.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -101,7 +104,133 @@ impl Default for WingsTypography {
     }
 }
 
+/// Builds an Apple text style from a point size, weight, line height in points and tracking
+/// in points.
+const fn apple(size: f32, weight: FontWeight, line: f32, tracking: f32) -> WingsTextStyle {
+    WingsTextStyle::new(size, weight, line / size, tracking)
+}
+
+/// The font Apple designs use: the system UI font (San Francisco) when the platform font
+/// database can provide it, then the bundled Inter.
+///
+/// Wings never bundles Apple fonts. On Apple targets Bevy's `system_font_discovery` resolves
+/// the system UI family to San Francisco; elsewhere (previewing the Apple look on Linux or
+/// Windows) the list falls through to Inter.
+pub fn apple_font() -> FontSource {
+    if cfg!(target_vendor = "apple") {
+        system_font()
+    } else {
+        FontSource::default()
+    }
+}
+
+/// The platform UI font (San Francisco on Apple platforms, Segoe UI Variable on Windows) when
+/// Bevy's system font discovery finds it, then the bundled Inter. Without system font
+/// discovery this is Inter.
+pub fn system_font() -> FontSource {
+    if cfg!(any(target_vendor = "apple", target_os = "windows")) {
+        FontSource::List(vec![
+            FontSource::Generic(GenericFontFamily::SystemUi),
+            FontSource::default(),
+        ])
+    } else {
+        FontSource::default()
+    }
+}
+
 impl WingsTypography {
+    /// The Material type scale (the default).
+    pub fn material() -> Self {
+        Self::default()
+    }
+
+    /// The iOS text styles (Large Title 34 down to Caption 12) at the default Dynamic Type
+    /// size, with San Francisco tracking.
+    pub fn ios() -> Self {
+        use FontWeight as W;
+        Self {
+            font: apple_font(),
+            styles: [
+                apple(34.0, W::BOLD, 41.0, 0.40),
+                apple(34.0, W::NORMAL, 41.0, 0.40),
+                apple(28.0, W::NORMAL, 34.0, 0.38),
+                apple(28.0, W::BOLD, 34.0, 0.38),
+                apple(22.0, W::NORMAL, 28.0, -0.26),
+                apple(20.0, W::NORMAL, 25.0, -0.45),
+                apple(17.0, W::SEMIBOLD, 22.0, -0.43),
+                apple(17.0, W::SEMIBOLD, 22.0, -0.43),
+                apple(15.0, W::SEMIBOLD, 20.0, -0.23),
+                apple(17.0, W::NORMAL, 22.0, -0.43),
+                apple(17.0, W::NORMAL, 22.0, -0.43),
+                apple(13.0, W::NORMAL, 18.0, -0.08),
+                apple(17.0, W::NORMAL, 22.0, -0.43),
+                apple(15.0, W::NORMAL, 20.0, -0.23),
+                apple(12.0, W::NORMAL, 16.0, 0.0),
+            ],
+        }
+    }
+
+    /// The macOS text styles (Large Title 26 down to Caption 10).
+    pub fn macos() -> Self {
+        use FontWeight as W;
+        Self {
+            font: apple_font(),
+            styles: [
+                apple(26.0, W::BOLD, 32.0, 0.22),
+                apple(26.0, W::NORMAL, 32.0, 0.22),
+                apple(22.0, W::NORMAL, 26.0, -0.26),
+                apple(22.0, W::BOLD, 26.0, -0.26),
+                apple(17.0, W::NORMAL, 22.0, -0.43),
+                apple(15.0, W::NORMAL, 20.0, -0.23),
+                apple(13.0, W::BOLD, 16.0, -0.08),
+                apple(13.0, W::BOLD, 16.0, -0.08),
+                apple(11.0, W::SEMIBOLD, 14.0, 0.06),
+                apple(13.0, W::NORMAL, 16.0, -0.08),
+                apple(13.0, W::NORMAL, 16.0, -0.08),
+                apple(10.0, W::NORMAL, 13.0, 0.12),
+                apple(13.0, W::NORMAL, 16.0, -0.08),
+                apple(11.0, W::NORMAL, 14.0, 0.06),
+                apple(10.0, W::NORMAL, 13.0, 0.12),
+            ],
+        }
+    }
+
+    /// The Fluent 2 type ramp (Segoe UI Variable: Caption 12, Body 14, Subtitle 20, Title 28,
+    /// Title Large 40, Display 68).
+    pub fn fluent() -> Self {
+        use FontWeight as W;
+        Self {
+            font: system_font(),
+            styles: [
+                apple(68.0, W::SEMIBOLD, 92.0, 0.0),
+                apple(40.0, W::SEMIBOLD, 52.0, 0.0),
+                apple(28.0, W::SEMIBOLD, 36.0, 0.0),
+                apple(28.0, W::SEMIBOLD, 36.0, 0.0),
+                apple(20.0, W::SEMIBOLD, 28.0, 0.0),
+                apple(18.0, W::SEMIBOLD, 24.0, 0.0),
+                apple(20.0, W::SEMIBOLD, 28.0, 0.0),
+                apple(14.0, W::SEMIBOLD, 20.0, 0.0),
+                apple(12.0, W::SEMIBOLD, 16.0, 0.0),
+                apple(14.0, W::NORMAL, 20.0, 0.0),
+                apple(14.0, W::NORMAL, 20.0, 0.0),
+                apple(12.0, W::NORMAL, 16.0, 0.0),
+                apple(14.0, W::NORMAL, 20.0, 0.0),
+                apple(12.0, W::NORMAL, 16.0, 0.0),
+                apple(11.0, W::NORMAL, 16.0, 0.0),
+            ],
+        }
+    }
+
+    /// The type scale of a design.
+    pub fn for_design(design: WingsDesign) -> Self {
+        match design {
+            WingsDesign::Material => Self::material(),
+            WingsDesign::Ios => Self::ios(),
+            WingsDesign::MacOs => Self::macos(),
+            WingsDesign::Fluent => Self::fluent(),
+        }
+    }
+
     fn index(role: TypeRole) -> usize {
         role as usize
     }
@@ -163,6 +292,17 @@ impl Default for WingsShapes {
 }
 
 impl WingsShapes {
+    /// Corner radii of a design. Apple designs use larger, softer corners.
+    pub fn for_design(design: WingsDesign) -> Self {
+        let radii = match design {
+            WingsDesign::Material => [0.0, 4.0, 8.0, 12.0, 16.0, 28.0],
+            WingsDesign::Ios => [0.0, 6.0, 10.0, 16.0, 26.0, 34.0],
+            WingsDesign::MacOs => [0.0, 4.0, 6.0, 10.0, 16.0, 26.0],
+            WingsDesign::Fluent => [0.0, 2.0, 4.0, 4.0, 8.0, 8.0],
+        };
+        Self { radii }
+    }
+
     /// Border radius for a shape role.
     pub fn radius(&self, role: ShapeRole) -> BorderRadius {
         match role {
@@ -193,6 +333,19 @@ pub struct WingsSpacing {
     pub lg: f32,
     /// 32 px.
     pub xl: f32,
+}
+
+impl WingsSpacing {
+    /// Spacing scale of a design.
+    pub fn for_design(design: WingsDesign) -> Self {
+        let [xs, sm, md, lg, xl] = match design {
+            WingsDesign::Material => [4.0, 8.0, 16.0, 24.0, 32.0],
+            WingsDesign::Ios => [4.0, 8.0, 16.0, 20.0, 32.0],
+            WingsDesign::MacOs => [4.0, 8.0, 12.0, 20.0, 28.0],
+            WingsDesign::Fluent => [4.0, 8.0, 12.0, 24.0, 36.0],
+        };
+        Self { xs, sm, md, lg, xl }
+    }
 }
 
 impl Default for WingsSpacing {
@@ -236,6 +389,37 @@ impl Default for WingsElevation {
 }
 
 impl WingsElevation {
+    /// Shadows of a design. Apple shadows are larger and much softer.
+    pub fn for_design(design: WingsDesign) -> Self {
+        match design {
+            WingsDesign::Material => Self::default(),
+            WingsDesign::Ios | WingsDesign::MacOs => Self {
+                levels: [
+                    (0.0, 0.0),
+                    (1.0, 3.0),
+                    (2.0, 8.0),
+                    (4.0, 16.0),
+                    (8.0, 28.0),
+                    (12.0, 40.0),
+                ],
+                light_alpha: 0.12,
+                dark_alpha: 0.45,
+            },
+            WingsDesign::Fluent => Self {
+                levels: [
+                    (0.0, 0.0),
+                    (1.0, 2.0),
+                    (2.0, 4.0),
+                    (8.0, 16.0),
+                    (16.0, 32.0),
+                    (32.0, 64.0),
+                ],
+                light_alpha: 0.14,
+                dark_alpha: 0.28,
+            },
+        }
+    }
+
     /// Shadow for a level (clamped to `0..=5`).
     pub fn shadow(&self, level: u8, shadow: Color, dark: bool) -> BoxShadow {
         let (y, blur) = self.levels[level.min(5) as usize];
@@ -270,6 +454,31 @@ pub struct WingsMotion {
     pub long: AnimationSpec,
     /// Color crossfade used when the theme changes. `None` switches instantly.
     pub theme_transition: Option<AnimationSpec>,
+}
+
+impl WingsMotion {
+    /// Motion of a design. Apple designs use critically damped springs (SwiftUI `.smooth`).
+    pub fn for_design(design: WingsDesign) -> Self {
+        match design {
+            WingsDesign::Material => Self::default(),
+            WingsDesign::Ios | WingsDesign::MacOs => Self {
+                short: AnimationSpec::spring_with(SpringSpec::from_response(0.3, 1.0)),
+                medium: AnimationSpec::spring_with(SpringSpec::from_response(0.5, 1.0)),
+                long: AnimationSpec::spring_with(SpringSpec::from_response(0.65, 1.0)),
+                theme_transition: Some(AnimationSpec::millis(250)),
+            },
+            // Fluent "fast invoke" motion: 167, 250 and 333 ms with a decelerating curve.
+            WingsDesign::Fluent => Self {
+                short: AnimationSpec::millis(167)
+                    .with_easing(WingsEasing::CubicBezier(0.0, 0.0, 0.0, 1.0)),
+                medium: AnimationSpec::millis(250)
+                    .with_easing(WingsEasing::CubicBezier(0.0, 0.0, 0.0, 1.0)),
+                long: AnimationSpec::millis(333)
+                    .with_easing(WingsEasing::CubicBezier(0.0, 0.0, 0.0, 1.0)),
+                theme_transition: Some(AnimationSpec::millis(167)),
+            },
+        }
+    }
 }
 
 impl Default for WingsMotion {
@@ -315,6 +524,58 @@ mod tests {
     }
 
     /// Shape roles map to radii.
+    #[test]
+    fn apple_type_scale() {
+        let ios = WingsTypography::ios();
+        assert_eq!(ios.get(TypeRole::BodyMedium).size, 17.0);
+        assert_eq!(ios.get(TypeRole::DisplayMedium).size, 34.0);
+        assert_eq!(ios.get(TypeRole::TitleLarge).weight, FontWeight::SEMIBOLD);
+        assert!((ios.get(TypeRole::BodyLarge).line_height - 22.0 / 17.0).abs() < 1e-6);
+        let mac = WingsTypography::macos();
+        assert_eq!(mac.get(TypeRole::BodyMedium).size, 13.0);
+        assert_eq!(mac.get(TypeRole::TitleLarge).weight, FontWeight::BOLD);
+        assert_eq!(
+            WingsTypography::for_design(WingsDesign::Material),
+            WingsTypography::default()
+        );
+    }
+
+    #[test]
+    fn fluent_tokens() {
+        let t = WingsTypography::fluent();
+        assert_eq!(t.get(TypeRole::BodyMedium).size, 14.0);
+        assert_eq!(t.get(TypeRole::DisplaySmall).size, 28.0);
+        assert_eq!(
+            WingsShapes::for_design(WingsDesign::Fluent).px(ShapeRole::Small),
+            4.0
+        );
+        assert_eq!(
+            WingsShapes::for_design(WingsDesign::Fluent).px(ShapeRole::Large),
+            8.0
+        );
+    }
+
+    #[test]
+    fn design_tokens_differ() {
+        assert_eq!(
+            WingsShapes::for_design(WingsDesign::Ios).px(ShapeRole::Large),
+            26.0
+        );
+        assert_eq!(
+            WingsShapes::for_design(WingsDesign::MacOs).px(ShapeRole::Medium),
+            10.0
+        );
+        assert_eq!(WingsSpacing::for_design(WingsDesign::MacOs).md, 12.0);
+        assert_eq!(
+            WingsElevation::for_design(WingsDesign::Ios).light_alpha,
+            0.12
+        );
+        assert!(matches!(
+            WingsMotion::for_design(WingsDesign::Ios).short,
+            AnimationSpec::Spring { .. }
+        ));
+    }
+
     #[test]
     fn shape_radius() {
         let s = WingsShapes::default();
