@@ -11,7 +11,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-bevy = { workspace = true, features = ["std", "bevy_ui", "bevy_scene", "bevy_asset", "bevy_log"] }
+bevy = { workspace = true, features = ["std", "bevy_ui", "bevy_scene", "bevy_asset", "bevy_log", "bevy_window", "mouse", "touch"] }
 bevy_wings_ui_core = { workspace = true }
 bevy_wings_ui_animation = { workspace = true }
 bevy_wings_ui_responsive = { workspace = true }

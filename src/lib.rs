@@ -64,6 +64,11 @@
 //! Add [`WingsUiPlugins`] after `DefaultPlugins`, because the widgets reuse the headless widget
 //! plugins that `DefaultPlugins` already registers.
 
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png",
+    html_favicon_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png"
+)]
+
 pub use bevy_wings_data as data;
 pub use bevy_wings_di as di;
 pub use bevy_wings_domain as domain;

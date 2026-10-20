@@ -41,6 +41,11 @@
 //! }
 //! ```
 
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png",
+    html_favicon_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png"
+)]
+
 pub mod button;
 pub mod feedback;
 pub mod feedback_skin;
@@ -64,6 +69,7 @@ pub mod sheet;
 pub mod skin;
 pub mod text;
 pub mod text_field;
+pub mod touch;
 pub mod virtual_list;
 
 use bevy::input_focus::InputFocus;
@@ -151,6 +157,9 @@ impl Plugin for WingsWidgetsPlugin {
             .init_resource::<glass::WingsGlassSettings>()
             .init_resource::<overlay::WingsFloatingChrome>()
             .init_resource::<gamepad::WingsGamepadNavigation>()
+            .init_resource::<touch::WingsTouchScroll>()
+            .init_resource::<touch::WingsTouchPresses>()
+            .add_observer(touch::record_touch_press)
             .init_resource::<bevy::input_focus::InputFocus>()
             .init_resource::<bevy::input_focus::directional_navigation::DirectionalNavigationMap>()
             .init_resource::<bevy::input_focus::directional_navigation::AutoNavigationConfig>()
@@ -165,6 +174,7 @@ impl Plugin for WingsWidgetsPlugin {
                     skin::sync_skin_design,
                     skin::skin_press_feedback,
                     feedback_skin::skin_dialogs,
+                    scaffold_skin::skin_bar_buttons,
                     (
                         button::button_variant_system,
                         button::fab_state_layer_system,
@@ -194,6 +204,8 @@ impl Plugin for WingsWidgetsPlugin {
                         scaffold_skin::compact_sidebars,
                         scaffold_skin::collapse_large_titles,
                         scaffold_skin::layout_top_app_bars,
+                        scaffold_skin::fit_inline_titles,
+                        scaffold_skin::title_scroll_effect,
                         scaffold_skin::window_chrome_system,
                         scaffold_skin::scaffold_safe_area_system,
                         scaffold_skin::scaffold_background_system,
@@ -227,18 +239,18 @@ impl Plugin for WingsWidgetsPlugin {
                         text_field::text_field_placeholder_system,
                         glass::glass_system,
                         glass::glass_removed,
+                        glass::scroll_edge_system,
+                        glass::scroll_edge_removed,
                     ),
                     (
                         segmented::segment_selection_system,
                         segmented::segment_elevation_system,
-                        popup::close_popups_on_escape,
                         popup::popup_system,
                         popup::position_popups,
                         popup::dropdown_value_system,
                         popup::tooltip_system,
                         popup::position_tooltips,
                         sheet::sheet_scrims,
-                        sheet::dismiss_sheets_on_escape,
                         picker::date_picker_system,
                         picker::time_picker_keys,
                         picker::time_picker_system,
@@ -253,7 +265,27 @@ impl Plugin for WingsWidgetsPlugin {
             )
             .add_systems(
                 Update,
-                gamepad::gamepad_navigation_system.in_set(WingsUiSystems::Input),
+                (
+                    gamepad::gamepad_navigation_system,
+                    (
+                        touch::complete_instant_taps,
+                        touch::touch_scroll_system,
+                        touch::scroll_momentum_system,
+                    )
+                        .chain(),
+                )
+                    .in_set(WingsUiSystems::Input),
+            )
+            // Back closes the topmost layer first: menus, then dialogs, then sheets.
+            .add_systems(
+                Update,
+                (
+                    popup::close_popups_on_back,
+                    feedback::dismiss_dialogs_on_back,
+                    sheet::dismiss_sheets_on_back,
+                )
+                    .chain()
+                    .in_set(bevy_wings_ui_core::back::WingsBackSystems::Overlays),
             )
             .add_systems(
                 Update,
@@ -331,6 +363,7 @@ pub mod prelude {
     pub use crate::skin::{WingsPressFeedback, WingsSkin, WingsSkinPart};
     pub use crate::text::{WingsIcon, WingsText, wings_text};
     pub use crate::text_field::{WingsTextChanged, WingsTextField};
+    pub use crate::touch::{WingsScrollMomentum, WingsTouchScroll};
     pub use crate::virtual_list::{WingsVirtualGrid, WingsVirtualList, WingsVirtualRows};
     pub use bevy::ui::{Checked, InteractionDisabled};
     pub use bevy::ui_widgets::{Activate, ValueChange};

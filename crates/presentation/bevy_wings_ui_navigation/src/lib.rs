@@ -31,6 +31,11 @@
 //! fn open(mut stack: ResMut<WingsBackStack<Screen>>) { stack.push(Screen::Message(7)); }
 //! ```
 
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png",
+    html_favicon_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png"
+)]
+
 pub mod back_stack;
 pub mod scene_strategy;
 
@@ -45,8 +50,8 @@ use bevy::ui::{Display, Node, PositionType, UiTransform, Val};
 
 use bevy_wings_di::WingsDiScope;
 use bevy_wings_ui_animation::prelude::{
-    AnimationSpec, OpacityProperty, ScaleProperty, SpringSpec, TranslationProperty, WingsAnimator,
-    WingsEasing, WingsTransition,
+    AnimationSpec, OpacityProperty, ScaleProperty, SpringSpec, TranslationProperty,
+    WingsAnimateExt, WingsAnimator, WingsEasing, WingsTransition,
 };
 use bevy_wings_ui_core::{WingsOpacity, WingsUiSystems, ensure_core};
 use bevy_wings_ui_responsive::{WidthClass, WingsViewport};
@@ -56,6 +61,7 @@ pub mod deep_link;
 pub mod persist;
 pub mod results;
 pub mod shared;
+pub mod swipe;
 
 pub use back_stack::{NavKey, WingsBackStack};
 pub use scene_strategy::{NavSceneStrategy, PaneRole, PaneSlot};
@@ -180,6 +186,8 @@ pub struct NavDestination {
     pub pane: PaneRole,
     /// Transitions overriding the display defaults when this entry enters or leaves.
     pub transitions: Option<WingsNavTransitions>,
+    /// Position of a top level destination (a tab), see [`NavDestination::tab`].
+    pub tab: Option<i32>,
 }
 
 /// Creates a destination from a scene.
@@ -188,6 +196,7 @@ pub fn nav_entry(scene: impl Scene) -> NavDestination {
         scene: Box::new(scene),
         pane: PaneRole::Single,
         transitions: None,
+        tab: None,
     }
 }
 
@@ -215,6 +224,34 @@ impl NavDestination {
         self.transitions = Some(transitions);
         self
     }
+
+    /// Marks a top level destination (a tab) at position `order`. Switching between tabs (a
+    /// back stack whose root changes from one tab to another) slides the screens like pages:
+    /// a tab further right comes in from the right, one further left from the left.
+    pub fn tab(mut self, order: i32) -> Self {
+        self.tab = Some(order);
+        self
+    }
+}
+
+/// Page slide between tabs `from` and `to`, `distance` logical pixels wide: the new screen
+/// comes in from the side of the tab's position and the old one leaves to the other side.
+/// Returns the enter and exit transitions, or `None` when it is not a move between tabs.
+pub fn tab_switch_transitions(
+    from: Option<i32>,
+    to: Option<i32>,
+    distance: f32,
+) -> Option<(WingsTransition, WingsTransition)> {
+    let (from, to) = (from?, to?);
+    if from == to {
+        return None;
+    }
+    let side = if to > from { 1.0 } else { -1.0 };
+    let spec = AnimationSpec::spring_with(SpringSpec::from_response(0.4, 1.0));
+    Some((
+        WingsTransition::slide_horizontally(side * distance).with_spec(spec),
+        WingsTransition::slide_horizontally(-side * distance).with_spec(spec),
+    ))
 }
 
 type Builder<K> = Arc<dyn Fn(&K) -> NavDestination + Send + Sync>;
@@ -224,6 +261,7 @@ type Builder<K> = Arc<dyn Fn(&K) -> NavDestination + Send + Sync>;
 pub struct WingsNavGraph<K: NavKey> {
     builder: Builder<K>,
     roles: std::sync::Mutex<bevy::platform::collections::HashMap<K, PaneRole>>,
+    tabs: std::sync::Mutex<bevy::platform::collections::HashMap<K, Option<i32>>>,
 }
 
 impl<K: NavKey> WingsNavGraph<K> {
@@ -232,6 +270,7 @@ impl<K: NavKey> WingsNavGraph<K> {
         Self {
             builder: Arc::new(builder),
             roles: Default::default(),
+            tabs: Default::default(),
         }
     }
 
@@ -242,7 +281,19 @@ impl<K: NavKey> WingsNavGraph<K> {
             .lock()
             .expect("nav graph lock")
             .insert(key.clone(), d.pane);
+        self.tabs
+            .lock()
+            .expect("nav graph lock")
+            .insert(key.clone(), d.tab);
         d
+    }
+
+    /// Tab position of `key`, if it is a tab (builds the destination once to learn it).
+    pub fn tab(&self, key: &K) -> Option<i32> {
+        if let Some(t) = self.tabs.lock().expect("nav graph lock").get(key) {
+            return *t;
+        }
+        self.build(key).tab
     }
 
     /// Pane role of `key` (builds the destination once to learn it, then caches it).
@@ -390,6 +441,9 @@ pub struct WingsBackInput {
     pub mouse_back: bool,
     /// Use the gamepad East button (B, Circle).
     pub gamepad_back: bool,
+    /// Use the system back: Android's back button and back gesture, and
+    /// [`WingsBack::press`](bevy_wings_ui_core::back::WingsBack::press).
+    pub system_back: bool,
 }
 
 impl Default for WingsBackInput {
@@ -398,6 +452,7 @@ impl Default for WingsBackInput {
             keys: vec![KeyCode::Escape, KeyCode::BrowserBack],
             mouse_back: true,
             gamepad_back: true,
+            system_back: true,
         }
     }
 }
@@ -423,22 +478,38 @@ pub fn apply_nav_commands<K: NavKey>(
     }
 }
 
-/// Pops the back stack on back input.
+/// Pops the back stack on back input, unless an overlay (menu, dialog, sheet) already used the
+/// press to close itself (see [`WingsBack`](bevy_wings_ui_core::back::WingsBack)).
+///
+/// At the first screen there is nothing to pop and the press does nothing: on Android the
+/// app stays open instead of closing.
 pub fn back_input<K: NavKey>(
     input: Res<WingsBackInput>,
     keys: Option<Res<ButtonInput<KeyCode>>>,
     mouse: Option<Res<ButtonInput<MouseButton>>>,
-    gamepads: Query<&bevy::input::gamepad::Gamepad>,
+    back: Option<ResMut<bevy_wings_ui_core::back::WingsBack>>,
     mut stack: ResMut<WingsBackStack<K>>,
 ) {
+    use bevy_wings_ui_core::back::WingsBackSource;
+    if back.as_ref().is_some_and(|b| b.is_handled()) {
+        return;
+    }
     let key_back = keys.is_some_and(|k| k.any_just_pressed(input.keys.iter().copied()));
     let mouse_back = input.mouse_back && mouse.is_some_and(|m| m.just_pressed(MouseButton::Back));
-    let pad_back = input.gamepad_back
-        && gamepads
-            .iter()
-            .any(|g| g.just_pressed(bevy::input::gamepad::GamepadButton::East));
-    if (key_back || mouse_back || pad_back) && stack.can_pop() {
+    let shared_back = back.as_ref().is_some_and(|b| {
+        b.pressed()
+            && match b.source() {
+                // Keyboard keys go through `input.keys`, which the app may change.
+                WingsBackSource::Keyboard => false,
+                WingsBackSource::Gamepad => input.gamepad_back,
+                WingsBackSource::System | WingsBackSource::Custom => input.system_back,
+            }
+    });
+    if (key_back || mouse_back || shared_back) && stack.can_pop() {
         stack.pop();
+        if let Some(mut back) = back {
+            back.consume();
+        }
     }
 }
 
@@ -471,6 +542,10 @@ pub fn sync_nav_displays<K: NavKey>(
         Option<&mut WingsNavDisplayState<K>>,
     )>,
     mut roots: Query<&mut Node, With<WingsNavEntry<K>>>,
+    swiped: Query<(
+        Has<swipe::WingsNavRevealed>,
+        Option<&swipe::WingsNavSwipedAway>,
+    )>,
     mut commands: Commands,
     mut events: MessageWriter<WingsNavEvent<K>>,
 ) {
@@ -498,6 +573,17 @@ pub fn sync_nav_displays<K: NavKey>(
             .take_while(|(a, b)| a == b)
             .count();
         let forward = new_keys.len() > prefix;
+        // Switching tabs: the root changed from one tab to another.
+        let tab_switch = if prefix == 0 && !first {
+            let width = viewport.as_ref().map_or(400.0, |v| v.width);
+            tab_switch_transitions(
+                state.keys.first().and_then(|k| graph.tab(k)),
+                new_keys.first().and_then(|k| graph.tab(k)),
+                width,
+            )
+        } else {
+            None
+        };
 
         // Entries removed from the stack.
         let old_visible = core::mem::take(&mut state.visible);
@@ -507,11 +593,17 @@ pub fn sync_nav_displays<K: NavKey>(
             });
             let Some(e) = state.entities[i] else { continue };
             let transitions = state.transitions[i].unwrap_or(display_transitions);
-            if old_visible.contains(&i) && !first {
-                let exit = if forward {
-                    transitions.push_exit
-                } else {
-                    transitions.pop_exit
+            if let Ok((_, Some(away))) = swiped.get(e) {
+                // Swiped away: keep going from under the finger to the edge.
+                commands
+                    .entity(e)
+                    .insert(WingsNavExiting { despawn: true })
+                    .animate::<TranslationProperty>(Vec2::new(away.0, 0.0), swipe::settle_spec());
+            } else if old_visible.contains(&i) && !first {
+                let exit = match tab_switch {
+                    Some((_, exit)) => exit,
+                    None if forward => transitions.push_exit,
+                    None => transitions.pop_exit,
                 };
                 commands
                     .entity(e)
@@ -541,7 +633,13 @@ pub fn sync_nav_displays<K: NavKey>(
                     if let Ok(mut node) = roots.get_mut(e) {
                         *node = pane_node(slot);
                     }
-                    if !was_visible && !first {
+                    if swiped.get(e).is_ok_and(|(revealed, _)| revealed) {
+                        // Uncovered by a swipe: settle from where the finger left it.
+                        commands
+                            .entity(e)
+                            .remove::<(WingsNavExiting, swipe::WingsNavRevealed)>()
+                            .animate::<TranslationProperty>(Vec2::ZERO, swipe::settle_spec());
+                    } else if !was_visible && !first {
                         let t = state.transitions[index].unwrap_or(display_transitions);
                         let enter = if forward { t.push_enter } else { t.pop_enter };
                         commands
@@ -575,7 +673,11 @@ pub fn sync_nav_displays<K: NavKey>(
                     events.write(WingsNavEvent::Spawned { key, entity: root });
                     if !first {
                         let t = destination.transitions.unwrap_or(display_transitions);
-                        let enter = if forward { t.push_enter } else { t.pop_enter };
+                        let enter = match tab_switch {
+                            Some((enter, _)) => enter,
+                            None if forward => t.push_enter,
+                            None => t.pop_enter,
+                        };
                         commands
                             .entity(root)
                             .queue(move |mut ew: EntityWorldMut| enter.play_enter(&mut ew));
@@ -636,7 +738,7 @@ pub fn finish_nav_exits(
 pub struct WingsNavigationPlugin<K: NavKey> {
     start: K,
     builder: std::sync::Mutex<Option<Builder<K>>>,
-    /// Pop on Escape and mouse back.
+    /// Go back on Escape, mouse back, gamepad B, Android's system back and the iOS edge swipe.
     pub back_input: bool,
 }
 
@@ -672,6 +774,7 @@ impl<K: NavKey> Plugin for WingsNavigationPlugin<K> {
         app.insert_resource(WingsNavGraph::<K> {
             builder,
             roles: Default::default(),
+            tabs: Default::default(),
         });
         app.init_resource::<WingsBackInput>()
             .init_resource::<results::WingsPendingResults<K>>()
@@ -704,7 +807,12 @@ impl<K: NavKey> Plugin for WingsNavigationPlugin<K> {
                 );
         }
         if self.back_input {
-            app.add_systems(Update, back_input::<K>.in_set(WingsUiSystems::Input));
+            app.init_resource::<swipe::WingsEdgeSwipeBack>()
+                .add_systems(
+                    Update,
+                    (back_input::<K>, swipe::edge_swipe_back::<K>)
+                        .in_set(bevy_wings_ui_core::back::WingsBackSystems::Navigation),
+                );
         }
         if !app.world().contains_resource::<FinishExitsAdded>() {
             app.insert_resource(FinishExitsAdded);
@@ -730,6 +838,7 @@ pub mod prelude {
     };
     pub use crate::scene_strategy::{NavSceneStrategy, PaneRole, PaneSlot};
     pub use crate::shared::{WingsSharedElement, WingsSharedElementMotion};
+    pub use crate::swipe::WingsEdgeSwipeBack;
     pub use crate::{
         NavDestination, WingsBackInput, WingsNavCommand, WingsNavDisplay, WingsNavDisplayState,
         WingsNavEntry, WingsNavEvent, WingsNavGraph, WingsNavTransitions, WingsNavigationPlugin,
@@ -782,6 +891,11 @@ mod tests {
     struct ScreenTag(u32);
 
     fn app(width: f32) -> (App, Entity) {
+        app_with(width, false)
+    }
+
+    /// A test app; with `tabs`, Home and Inbox are tabs 0 and 1.
+    fn app_with(width: f32, tabs: bool) -> (App, Entity) {
         let mut app = App::new();
         app.add_plugins((
             MinimalPlugins,
@@ -789,8 +903,10 @@ mod tests {
             ScenePlugin,
             WingsAnimationPlugin,
             WingsResponsivePlugin::default(),
-            WingsNavigationPlugin::new(Screen::Home, |key: &Screen| match key {
+            WingsNavigationPlugin::new(Screen::Home, move |key: &Screen| match key {
+                Screen::Home if tabs => nav_entry(bsn! { ScreenTag(0) }).tab(0),
                 Screen::Home => nav_entry(bsn! { ScreenTag(0) }),
+                Screen::Inbox if tabs => nav_entry(bsn! { ScreenTag(1) }).tab(1),
                 Screen::Inbox => nav_entry(bsn! { ScreenTag(1) }).list_pane(),
                 Screen::Message(id) => {
                     let id = *id;
@@ -945,6 +1061,219 @@ mod tests {
                 ..
             }
         )));
+    }
+
+    /// An overlay that closes on back uses the press, so navigation stays where it is.
+    #[test]
+    fn overlay_consumes_back() {
+        #[derive(Resource)]
+        struct PanelOpen(bool);
+        let (mut app, _display) = app(400.0);
+        app.insert_resource(PanelOpen(true)).add_systems(
+            Update,
+            (|mut back: ResMut<bevy_wings_ui_core::back::WingsBack>,
+              mut panel: ResMut<PanelOpen>| {
+                if panel.0 && back.consume() {
+                    panel.0 = false;
+                }
+            })
+            .in_set(bevy_wings_ui_core::back::WingsBackSystems::Overlays),
+        );
+        app.world_mut()
+            .resource_mut::<WingsBackStack<Screen>>()
+            .push(Screen::Inbox);
+        app.update();
+        let press = |app: &mut App| {
+            let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            keys.release(KeyCode::Escape);
+            keys.clear();
+            keys.press(KeyCode::Escape);
+        };
+        press(&mut app);
+        app.update();
+        assert!(!app.world().resource::<PanelOpen>().0, "the panel closed");
+        assert_eq!(app.world().resource::<WingsBackStack<Screen>>().len(), 2);
+        press(&mut app);
+        app.update();
+        assert_eq!(app.world().resource::<WingsBackStack<Screen>>().len(), 1);
+    }
+
+    /// Android's back button and back gesture go back one screen; at the first screen the
+    /// press does nothing, so the app stays open.
+    #[test]
+    fn system_back_pops_and_keeps_the_app_open() {
+        use bevy::input::keyboard::Key;
+        let (mut app, _display) = app(400.0);
+        app.init_resource::<ButtonInput<Key>>();
+        app.world_mut()
+            .resource_mut::<WingsBackStack<Screen>>()
+            .push(Screen::Inbox);
+        app.update();
+        let system_back = |app: &mut App| {
+            let mut keys = app.world_mut().resource_mut::<ButtonInput<Key>>();
+            keys.release(Key::BrowserBack);
+            keys.clear();
+            keys.press(Key::BrowserBack);
+            app.update();
+        };
+        system_back(&mut app);
+        assert_eq!(app.world().resource::<WingsBackStack<Screen>>().len(), 1);
+        system_back(&mut app);
+        assert_eq!(app.world().resource::<WingsBackStack<Screen>>().len(), 1);
+        assert!(app.world().resource::<Messages<AppExit>>().is_empty());
+    }
+
+    fn swipe_app() -> (App, Entity) {
+        let (mut app, display) = app(400.0);
+        app.insert_resource(crate::swipe::WingsEdgeSwipeBack {
+            enabled: true,
+            mouse: true,
+            ..default()
+        });
+        app.world_mut().spawn((
+            Window {
+                resolution: (400, 800).into(),
+                ..default()
+            },
+            bevy::window::PrimaryWindow,
+        ));
+        app.world_mut()
+            .resource_mut::<WingsBackStack<Screen>>()
+            .push(Screen::Inbox);
+        settle(&mut app);
+        (app, display)
+    }
+
+    fn drag(app: &mut App, xs: &[f32]) {
+        let mut window = app
+            .world_mut()
+            .query_filtered::<&mut Window, With<bevy::window::PrimaryWindow>>();
+        for (i, x) in xs.iter().enumerate() {
+            window
+                .single_mut(app.world_mut())
+                .unwrap()
+                .set_cursor_position(Some(Vec2::new(*x, 300.0)));
+            {
+                let mut mouse = app.world_mut().resource_mut::<ButtonInput<MouseButton>>();
+                mouse.clear();
+                if i == 0 {
+                    mouse.press(MouseButton::Left);
+                }
+            }
+            app.update();
+        }
+    }
+
+    fn release(app: &mut App) {
+        let mut mouse = app.world_mut().resource_mut::<ButtonInput<MouseButton>>();
+        mouse.clear();
+        mouse.release(MouseButton::Left);
+        app.update();
+    }
+
+    fn offset(app: &App, e: Entity) -> f32 {
+        match app.world().get::<UiTransform>(e).unwrap().translation.x {
+            Val::Px(x) => x,
+            _ => 0.0,
+        }
+    }
+
+    /// Dragging from the left edge slides the screen with the finger and uncovers the one
+    /// below; letting go past a third of the width goes back.
+    #[test]
+    fn edge_swipe_goes_back() {
+        let (mut app, display) = swipe_app();
+        let (entities, visible) = state(&app, display);
+        assert_eq!(visible, vec![1]);
+        let (home, inbox) = (entities[0].unwrap(), entities[1].unwrap());
+        assert_eq!(
+            app.world().get::<Node>(home).unwrap().display,
+            Display::None
+        );
+
+        drag(&mut app, &[4.0, 20.0, 60.0, 100.0, 140.0, 180.0, 204.0]);
+        assert_eq!(offset(&app, inbox), 200.0);
+        assert_eq!(
+            app.world().get::<Node>(home).unwrap().display,
+            Display::Flex
+        );
+        let behind = -crate::swipe::PARALLAX * 400.0 * (1.0 - 200.0 / 400.0);
+        assert!((offset(&app, home) - behind).abs() < 0.01);
+        assert_eq!(app.world().resource::<WingsBackStack<Screen>>().len(), 2);
+
+        release(&mut app);
+        assert_eq!(app.world().resource::<WingsBackStack<Screen>>().len(), 1);
+        settle(&mut app);
+        settle(&mut app);
+        assert!(
+            app.world().get_entity(inbox).is_err(),
+            "the swiped screen is gone"
+        );
+        assert!(offset(&app, home).abs() < 0.5);
+        assert_eq!(state(&app, display).1, vec![0]);
+    }
+
+    /// A short, slow drag springs back and keeps the screen.
+    #[test]
+    fn short_edge_swipe_springs_back() {
+        let (mut app, display) = swipe_app();
+        let (entities, _) = state(&app, display);
+        let (home, inbox) = (entities[0].unwrap(), entities[1].unwrap());
+        drag(&mut app, &[4.0, 12.0, 20.0, 28.0, 36.0, 44.0, 50.0, 54.0]);
+        assert!(offset(&app, inbox) > 40.0);
+        release(&mut app);
+        settle(&mut app);
+        settle(&mut app);
+        assert_eq!(app.world().resource::<WingsBackStack<Screen>>().len(), 2);
+        assert!(offset(&app, inbox).abs() < 0.5);
+        assert_eq!(
+            app.world().get::<Node>(home).unwrap().display,
+            Display::None
+        );
+    }
+
+    /// Drags that start away from the edge are left to the content.
+    #[test]
+    fn swipe_must_start_at_the_edge() {
+        let (mut app, display) = swipe_app();
+        let inbox = state(&app, display).0[1].unwrap();
+        drag(&mut app, &[100.0, 160.0, 260.0, 320.0]);
+        release(&mut app);
+        assert_eq!(offset(&app, inbox), 0.0);
+        assert_eq!(app.world().resource::<WingsBackStack<Screen>>().len(), 2);
+    }
+
+    /// Switching to a tab on the right slides the new screen in from the right; switching back
+    /// slides it in from the left.
+    #[test]
+    fn tab_switch_slides_by_direction() {
+        let (mut app, display) = app_with(400.0, true);
+        let home = state(&app, display).0[0].unwrap();
+        app.world_mut()
+            .resource_mut::<WingsBackStack<Screen>>()
+            .reset(Screen::Inbox);
+        app.update();
+        app.update();
+        let inbox = state(&app, display).0[0].unwrap();
+        assert!(
+            offset(&app, inbox) > 0.0,
+            "the tab on the right comes from the right"
+        );
+        assert!(offset(&app, home) < 0.0, "the old tab leaves to the left");
+        settle(&mut app);
+        settle(&mut app);
+        assert!(offset(&app, inbox).abs() < 0.5);
+        app.world_mut()
+            .resource_mut::<WingsBackStack<Screen>>()
+            .reset(Screen::Home);
+        app.update();
+        app.update();
+        let home = state(&app, display).0[0].unwrap();
+        assert!(
+            offset(&app, home) < 0.0,
+            "the tab on the left comes from the left"
+        );
+        assert!(offset(&app, inbox) > 0.0, "the old tab leaves to the right");
     }
 
     /// Escape pops the stack but never the last entry.

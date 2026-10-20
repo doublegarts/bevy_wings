@@ -10,11 +10,19 @@
 //!   when nothing changed.
 //! * [`WingsOpacity`]: a subtree opacity multiplier understood by the theme painter and the
 //!   animation system (Bevy UI has no node opacity, Wings adds one).
+//! * [`back`]: back input (Escape, browser back, gamepad B) shared by overlays and navigation,
+//!   so one press closes the topmost menu, dialog or sheet before navigation goes back.
 //! * [`hierarchy`]: helpers to walk up the entity hierarchy (for example to find the closest
 //!   ancestor that owns a view model or a theme override).
 //!
 //! Add [`WingsCorePlugin`] once (the umbrella `WingsUiPlugins` group does this for you).
 
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png",
+    html_favicon_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png"
+)]
+
+pub mod back;
 pub mod hierarchy;
 pub mod opacity;
 pub mod state;
@@ -104,6 +112,21 @@ impl Plugin for WingsCorePlugin {
                 WingsUiSystems::Animate,
             )
                 .chain(),
+        )
+        .configure_sets(
+            Update,
+            (
+                back::WingsBackSystems::Detect,
+                back::WingsBackSystems::Overlays,
+                back::WingsBackSystems::Navigation,
+            )
+                .chain()
+                .in_set(WingsUiSystems::Input),
+        )
+        .init_resource::<back::WingsBack>()
+        .add_systems(
+            Update,
+            back::detect_back.in_set(back::WingsBackSystems::Detect),
         );
     }
 
@@ -124,6 +147,7 @@ pub fn ensure_core(app: &mut App) {
 
 /// Commonly used items.
 pub mod prelude {
+    pub use crate::back::{WingsBack, WingsBackSource, WingsBackSystems};
     pub use crate::hierarchy::{ancestors, find_ancestor_with};
     pub use crate::{WingsCorePlugin, WingsMemo, WingsOpacity, WingsState, WingsUiSystems};
 }

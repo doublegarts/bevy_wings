@@ -2,7 +2,7 @@
 //!
 //! A popup is a floating panel anchored to the widget that opened it. It lives on the overlay
 //! layer when there is one (so it renders as Liquid Glass in the Apple designs) and closes on
-//! Escape, on a click outside it, or when an item is chosen.
+//! back (Escape, gamepad B), on a click outside it, or when an item is chosen.
 //!
 //! | Design | Menu | Dropdown | Tooltip |
 //! | --- | --- | --- | --- |
@@ -27,6 +27,7 @@ use bevy::ui::UiGlobalTransform;
 use bevy::ui_widgets::{Activate, Button};
 use bevy::window::SystemCursorIcon;
 
+use bevy_wings_ui_core::back::WingsBack;
 use bevy_wings_ui_responsive::WingsViewport;
 use bevy_wings_ui_theme::prelude::{
     ColorRole, ShapeRole, TypeRole, WingsBackground, WingsBorderPaint, WingsContentColor,
@@ -442,16 +443,14 @@ pub fn item_activated(
     });
 }
 
-/// Closes every open popup on Escape.
-pub fn close_popups_on_escape(
-    keys: Option<Res<ButtonInput<KeyCode>>>,
-    mut owners: Query<&mut WingsPopupOwner>,
-) {
-    if keys.is_some_and(|k| k.just_pressed(KeyCode::Escape)) {
-        for mut owner in &mut owners {
-            if owner.open {
-                owner.open = false;
-            }
+/// Closes every open popup on back (Escape, gamepad B) before anything else uses the press.
+pub fn close_popups_on_back(mut back: ResMut<WingsBack>, mut owners: Query<&mut WingsPopupOwner>) {
+    if !owners.iter().any(|o| o.open) || !back.consume() {
+        return;
+    }
+    for mut owner in &mut owners {
+        if owner.open {
+            owner.open = false;
         }
     }
 }

@@ -217,6 +217,154 @@ pub fn glass_system(
     let _ = (&parents, &roots, dark);
 }
 
+/// The iOS 26 "soft" scroll edge under a bar: content scrolling beneath blurs progressively
+/// toward the top of the screen, takes on the background color and fades out a little below
+/// the bar, without a visible edge. Wings draws it on a [`WingsScrollEdgeLayer`] child: with
+/// `WingsScrollEdgeMaterial` on the overlay layer (`shaders` feature), elsewhere a background
+/// color gradient.
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub struct WingsScrollEdge {
+    /// Height from the top of the bar that the effect covers fully (the status bar and the
+    /// toolbar row); it fades out over [`SCROLL_EDGE_OVERHANG`] below that.
+    pub height: f32,
+}
+
+impl Default for WingsScrollEdge {
+    fn default() -> Self {
+        Self { height: 52.0 }
+    }
+}
+
+/// The layer that draws a [`WingsScrollEdge`], behind the bar's content.
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsScrollEdgeLayer;
+
+/// How far the scroll edge fades out below the bar, in logical pixels (as on iOS 26).
+pub const SCROLL_EDGE_OVERHANG: f32 = 24.0;
+
+/// The fallback: the background color fading out toward the bottom.
+pub fn scroll_edge_gradient(background: Color) -> BackgroundGradient {
+    let solid = background.with_alpha(0.94);
+    BackgroundGradient::from(LinearGradient::to_bottom(vec![
+        ColorStop::new(solid, percent(0)),
+        ColorStop::new(solid, percent(70)),
+        ColorStop::new(background.with_alpha(0.0), percent(100)),
+    ]))
+}
+
+fn scroll_edge_layer_node(height: f32) -> Node {
+    Node {
+        position_type: PositionType::Absolute,
+        left: px(0),
+        right: px(0),
+        top: px(0),
+        height: px(height + SCROLL_EDGE_OVERHANG),
+        ..default()
+    }
+}
+
+/// Creates, restyles and follows the theme for scroll edge layers.
+#[allow(clippy::too_many_arguments)]
+#[cfg_attr(not(feature = "shaders"), allow(unused_variables))]
+pub fn scroll_edge_system(
+    mut commands: Commands,
+    theme: Res<WingsTheme>,
+    settings: Res<WingsGlassSettings>,
+    parents: Query<&ChildOf>,
+    roots: Query<(), With<WingsOverlayRoot>>,
+    children: Query<&Children>,
+    layers: Query<(), With<WingsScrollEdgeLayer>>,
+    edges: Query<(Entity, Ref<WingsScrollEdge>, Option<Ref<ChildOf>>)>,
+    #[cfg(feature = "shaders")] backdrop: Option<
+        Res<bevy_wings_ui_shaders::backdrop::WingsBackdrop>,
+    >,
+    #[cfg(feature = "shaders")] materials: Option<
+        ResMut<Assets<bevy_wings_ui_shaders::WingsScrollEdgeMaterial>>,
+    >,
+) {
+    #[cfg(feature = "shaders")]
+    let mut materials = materials;
+    #[cfg(feature = "shaders")]
+    let backdrop_changed = backdrop.as_ref().is_some_and(|b| b.is_changed());
+    #[cfg(not(feature = "shaders"))]
+    let backdrop_changed = false;
+    let force = theme.is_changed() || settings.is_changed() || backdrop_changed;
+    let background = theme.color(ColorRole::Background);
+    for (entity, edge, parent) in &edges {
+        let rebuild = force || edge.is_added() || parent.is_some_and(|p| p.is_changed());
+        if !rebuild {
+            if edge.is_changed() {
+                // Only the covered height moved (safe area change): resize the layer.
+                for kid in children
+                    .get(entity)
+                    .into_iter()
+                    .flat_map(|k| k.iter())
+                    .filter(|k| layers.contains(*k))
+                {
+                    commands
+                        .entity(kid)
+                        .insert(scroll_edge_layer_node(edge.height));
+                }
+            }
+            continue;
+        }
+        // Replace the layer, so it always matches the current place and theme.
+        if let Ok(kids) = children.get(entity) {
+            for kid in kids.iter().filter(|k| layers.contains(*k)) {
+                commands.entity(kid).despawn();
+            }
+        }
+        let layer = commands
+            .spawn((
+                scroll_edge_layer_node(edge.height),
+                WingsScrollEdgeLayer,
+                ZIndex(-1),
+                bevy::picking::Pickable::IGNORE,
+                ChildOf(entity),
+            ))
+            .id();
+        #[allow(unused_mut)]
+        let mut real = false;
+        #[cfg(feature = "shaders")]
+        if let (Some(backdrop), Some(materials)) = (backdrop.as_ref(), materials.as_mut())
+            && settings.enabled
+            && !settings.reduce_transparency
+            && on_overlay(entity, &parents, &roots)
+        {
+            let m = bevy_wings_ui_shaders::WingsScrollEdgeMaterial::soft(
+                backdrop,
+                background,
+                theme.is_dark(),
+            );
+            commands
+                .entity(layer)
+                .insert(MaterialNode(materials.add(m)));
+            real = true;
+        }
+        if !real {
+            commands
+                .entity(layer)
+                .insert(scroll_edge_gradient(background));
+        }
+    }
+}
+
+/// Removes the layer when the scroll edge is taken off a node.
+pub fn scroll_edge_removed(
+    mut commands: Commands,
+    mut removed: RemovedComponents<WingsScrollEdge>,
+    children: Query<&Children>,
+    layers: Query<(), With<WingsScrollEdgeLayer>>,
+) {
+    for entity in removed.read() {
+        if let Ok(kids) = children.get(entity) {
+            for kid in kids.iter().filter(|k| layers.contains(*k)) {
+                commands.entity(kid).despawn();
+            }
+        }
+    }
+}
+
 /// Removes the material when glass is taken off a node.
 pub fn glass_removed(
     mut commands: Commands,

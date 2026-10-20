@@ -12,6 +12,7 @@
 //! | [`WingsLiquidGlassMaterial`] | Liquid Glass: the blurred backdrop with refraction and a rim light |
 //! | [`WingsGradientBorderMaterial`] | Border with an angular gradient, optionally turning |
 //! | [`WingsNoiseMaterial`] | Animated fractal noise: paper, clouds, smoke or film grain |
+//! | [`WingsScrollEdgeMaterial`] | iOS 26 soft scroll edge: progressive blur that fades out under bars |
 //!
 //! Every shader is embedded in the binary (no asset files to ship), respects the node's
 //! border radius with an anti aliased signed distance field, and animated ones read Bevy's
@@ -25,6 +26,11 @@
 //!     ));
 //! }
 //! ```
+
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png",
+    html_favicon_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png"
+)]
 
 use bevy::asset::embedded_asset;
 use bevy::color::{Color, ColorToComponents, LinearRgba};
@@ -61,10 +67,12 @@ pub mod sources {
     pub const GRADIENT_BORDER: &str = include_str!("shaders/gradient_border.wesl");
     /// Noise shader.
     pub const NOISE: &str = include_str!("shaders/noise.wesl");
+    /// Scroll edge shader.
+    pub const SCROLL_EDGE: &str = include_str!("shaders/scroll_edge.wesl");
     /// Backdrop blur passes (fullscreen, entry points `downsample` and `blur`).
     pub const BACKDROP: &str = include_str!("shaders/backdrop.wesl");
     /// All UI material sources with their file names.
-    pub const ALL: [(&str, &str); 8] = [
+    pub const ALL: [(&str, &str); 9] = [
         ("ripple.wesl", RIPPLE),
         ("shimmer.wesl", SHIMMER),
         ("circular_progress.wesl", CIRCULAR_PROGRESS),
@@ -73,6 +81,7 @@ pub mod sources {
         ("liquid_glass.wesl", LIQUID_GLASS),
         ("gradient_border.wesl", GRADIENT_BORDER),
         ("noise.wesl", NOISE),
+        ("scroll_edge.wesl", SCROLL_EDGE),
     ];
 }
 
@@ -594,6 +603,58 @@ impl UiMaterial for WingsNoiseMaterial {
     }
 }
 
+/// The iOS 26 "soft" scroll edge effect under a bar: the content behind blurs progressively
+/// toward the top of the screen, takes on the background color and fades out toward the bar's
+/// bottom edge, so the bar has no visible edge. Samples the same backdrop as
+/// [`WingsLiquidGlassMaterial`], so the node must be on the overlay layer.
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone, PartialEq)]
+pub struct WingsScrollEdgeMaterial {
+    /// Background color, strength in alpha.
+    #[uniform(0)]
+    pub tint: LinearRgba,
+    /// Share of the height (from the top) that stays fully covered before fading out.
+    #[uniform(0)]
+    pub fade_start: f32,
+    /// `0..1` blur strength at the top.
+    #[uniform(0)]
+    pub blur: f32,
+    /// `0..1` overall strength: how much content has scrolled under the bar.
+    #[uniform(0)]
+    pub strength: f32,
+    /// Padding.
+    #[uniform(0)]
+    pub padding: f32,
+    /// Half resolution backdrop.
+    #[texture(1)]
+    #[sampler(2)]
+    pub light: Handle<Image>,
+    /// Quarter resolution, blurred backdrop.
+    #[texture(3)]
+    #[sampler(4)]
+    pub heavy: Handle<Image>,
+}
+
+impl WingsScrollEdgeMaterial {
+    /// The soft edge over `backdrop`, settling into `background`.
+    pub fn soft(backdrop: &backdrop::WingsBackdrop, background: Color, dark: bool) -> Self {
+        Self {
+            tint: lin(background.with_alpha(if dark { 0.72 } else { 0.8 })),
+            fade_start: 0.72,
+            blur: 1.0,
+            strength: 1.0,
+            padding: 0.0,
+            light: backdrop.light.clone(),
+            heavy: backdrop.heavy.clone(),
+        }
+    }
+}
+
+impl UiMaterial for WingsScrollEdgeMaterial {
+    fn fragment_shader() -> ShaderRef {
+        shader_path!("scroll_edge.wesl").into()
+    }
+}
+
 /// Converts a color to the `[f32; 4]` linear representation used by the uniforms.
 pub fn linear_array(c: Color) -> [f32; 4] {
     c.to_linear().to_f32_array()
@@ -613,6 +674,7 @@ impl Plugin for WingsShadersPlugin {
         embedded_asset!(app, "shaders/liquid_glass.wesl");
         embedded_asset!(app, "shaders/gradient_border.wesl");
         embedded_asset!(app, "shaders/noise.wesl");
+        embedded_asset!(app, "shaders/scroll_edge.wesl");
         app.add_plugins((
             UiMaterialPlugin::<WingsRippleMaterial>::default(),
             UiMaterialPlugin::<WingsShimmerMaterial>::default(),
@@ -622,6 +684,7 @@ impl Plugin for WingsShadersPlugin {
             UiMaterialPlugin::<WingsLiquidGlassMaterial>::default(),
             UiMaterialPlugin::<WingsGradientBorderMaterial>::default(),
             UiMaterialPlugin::<WingsNoiseMaterial>::default(),
+            UiMaterialPlugin::<WingsScrollEdgeMaterial>::default(),
             backdrop::WingsBackdropPlugin,
         ));
     }
@@ -633,7 +696,7 @@ pub mod prelude {
     pub use crate::{
         WingsAuroraMaterial, WingsCircularProgressMaterial, WingsGlassMaterial,
         WingsGradientBorderMaterial, WingsLiquidGlassMaterial, WingsNoiseMaterial,
-        WingsRippleMaterial, WingsShadersPlugin, WingsShimmerMaterial,
+        WingsRippleMaterial, WingsScrollEdgeMaterial, WingsShadersPlugin, WingsShimmerMaterial,
     };
     pub use bevy::ui_render::prelude::MaterialNode;
 }
@@ -709,6 +772,7 @@ mod tests {
             ("liquid_glass.wesl", "LiquidGlassMaterial", 48),
             ("gradient_border.wesl", "GradientBorderMaterial", 64),
             ("noise.wesl", "NoiseMaterial", 48),
+            ("scroll_edge.wesl", "ScrollEdgeMaterial", 32),
         ];
         for (file, struct_name, size) in expected {
             let src = sources::ALL.iter().find(|(n, _)| *n == file).unwrap().1;

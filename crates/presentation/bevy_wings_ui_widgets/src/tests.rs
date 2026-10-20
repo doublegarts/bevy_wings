@@ -1420,3 +1420,130 @@ fn large_title_ignores_nested_scrolls() {
     settle(&mut app, 2);
     assert!(collapsed(&app));
 }
+
+/// One back press closes one layer: the menu first, then the dialog, then the sheet.
+#[test]
+fn back_closes_topmost_layer() {
+    #[derive(Resource, Default)]
+    struct Dismissed(Vec<&'static str>);
+    let mut app = app_with(WingsDesign::Material);
+    app.init_resource::<Dismissed>();
+    let sheet = spawn(
+        &mut app,
+        bsn! {
+            @WingsBottomSheet { @title: "Share", @open: true }
+            on(|_: On<WingsSheetDismissed>, mut d: ResMut<Dismissed>| d.0.push("sheet"))
+        },
+    );
+    let dialog = spawn(
+        &mut app,
+        bsn! {
+            @WingsDialog { @title: "Delete?", @text: "Gone.", @confirm: "Delete", @open: true }
+            on(|r: On<WingsDialogResult>, mut d: ResMut<Dismissed>| {
+                assert!(!r.confirmed);
+                d.0.push("dialog");
+            })
+        },
+    );
+    let dropdown = spawn(
+        &mut app,
+        bsn! { @WingsDropdown { @options: vec!["A".into(), "B".into()] } },
+    );
+    app.world_mut().trigger(Activate { entity: dropdown });
+    settle(&mut app, 3);
+    let popup_open = |app: &App| {
+        app.world()
+            .get::<crate::popup::WingsPopupOwner>(dropdown)
+            .unwrap()
+            .open
+    };
+    let visible = |app: &App, e: Entity| {
+        app.world()
+            .get::<WingsAnimatedVisibility>(e)
+            .unwrap()
+            .visible
+    };
+    assert!(popup_open(&app) && visible(&app, dialog) && visible(&app, sheet));
+    // The same path Escape, the browser back key and gamepad B take.
+    let press = |app: &mut App| {
+        app.world_mut()
+            .resource_mut::<bevy_wings_ui_core::back::WingsBack>()
+            .press();
+        app.update();
+        app.update();
+    };
+    press(&mut app);
+    assert!(!popup_open(&app));
+    assert!(visible(&app, dialog) && visible(&app, sheet));
+    press(&mut app);
+    assert!(!visible(&app, dialog) && visible(&app, sheet));
+    press(&mut app);
+    assert!(!visible(&app, sheet));
+    assert_eq!(
+        app.world().resource::<Dismissed>().0,
+        vec!["dialog", "sheet"]
+    );
+}
+
+/// iOS bars always carry the soft scroll edge over the status bar and toolbar row (content
+/// shows it by moving into it), and the titles hand over with the scroll offset.
+#[test]
+fn ios_bar_scroll_edge_and_title_handover() {
+    let mut app = app_with(WingsDesign::Ios);
+    let scaffold = spawn(
+        &mut app,
+        bsn! {
+            @WingsScaffold
+            Children [
+                @WingsTopAppBar { @title: "Inbox" }
+                --
+                @WingsScrollColumn
+            ]
+        },
+    );
+    settle(&mut app, 3);
+    let bar = descendants_with::<WingsTopAppBar>(&mut app, scaffold)[0];
+    let title = descendants_with::<crate::scaffold::WingsTopAppBarTitle>(&mut app, bar)[0];
+    let scroll = descendants_with::<bevy::ui_widgets::ScrollArea>(&mut app, scaffold)[0];
+    app.world_mut()
+        .entity_mut(scroll)
+        .insert(InheritedVisibility::VISIBLE);
+    // At rest: the edge is there, drawn on a layer that reaches below the toolbar row.
+    let layers = descendants_with::<crate::glass::WingsScrollEdgeLayer>(&mut app, bar);
+    assert_eq!(layers.len(), 1);
+    assert!(app.world().get::<crate::glass::WingsGlass>(bar).is_none());
+    assert!(app.world().get::<BackgroundGradient>(layers[0]).is_some());
+    let edge = *app
+        .world()
+        .get::<crate::glass::WingsScrollEdge>(bar)
+        .unwrap();
+    assert_eq!(
+        app.world().get::<Node>(layers[0]).unwrap().height,
+        px(edge.height + crate::glass::SCROLL_EDGE_OVERHANG)
+    );
+    let opacity = |app: &App| app.world().get::<WingsOpacity>(title).unwrap().0;
+    assert_eq!(opacity(&app), 1.0);
+    // Half way to the collapse: the large title is half faded.
+    let set = |app: &mut App, y: f32| {
+        app.world_mut()
+            .get_mut::<ScrollPosition>(scroll)
+            .unwrap()
+            .0
+            .y = y;
+        settle(app, 3);
+    };
+    set(&mut app, 12.0);
+    assert!((opacity(&app) - 0.5).abs() < 0.01);
+    // Just collapsed: the inline title starts invisible and fades in with more scrolling.
+    set(&mut app, 25.0);
+    assert!(opacity(&app) < 0.1);
+    set(&mut app, 60.0);
+    assert_eq!(opacity(&app), 1.0);
+    // Back to the top: the large title is fully there again.
+    set(&mut app, 0.0);
+    assert_eq!(opacity(&app), 1.0);
+    assert_eq!(
+        descendants_with::<crate::glass::WingsScrollEdgeLayer>(&mut app, bar).len(),
+        1
+    );
+}

@@ -29,6 +29,11 @@ Liquid Glass, screenshots) is checked by the visual regression harness or by han
 - [x] `wings.toml`: `ui = "system"` (Material on Android and Linux, Fluent on Windows,
       Cupertino on iOS and macOS) or `ui = "custom"` (one design everywhere), appearance,
       accent, custom fonts, radii, spacing and color roles; `wings_config!` embeds it
+- [x] iOS 26 navigation bar: glass capsule buttons, soft scroll edge over the status bar and
+      toolbar row, inline title centered like UIKit (shortened with "…" when needed), large
+      and inline titles handing over with the scroll offset; compared with a SwiftUI app on
+      the iOS 26 simulator
+- [x] Tab bars: tabs share the width equally; selection works for instant taps
 - [x] iOS: large titles that collapse on scroll, inset grouped lists, capsule tab bar,
       toolbar buttons, alerts, sheets with detents, switches, segmented controls
 - [x] macOS: unified transparent title bar, sidebar, push buttons, switches, pop up buttons
@@ -73,10 +78,23 @@ Liquid Glass, screenshots) is checked by the visual regression harness or by han
 - [x] Bottom sheets and side sheets with scrims, detents and dismissal
 - [x] Focus ring styling for keyboard navigation, per design
 - [x] Gamepad navigation: D-pad and stick move focus between all interactive widgets, South
-      activates, East closes popups and sheets and pops the navigation stack; arrow keys too
+      activates, East goes back; arrow keys too
+- [x] Touch scrolling for every scroll area, with momentum after a flick (iOS deceleration),
+      catching, and tap cancellation once a drag scrolls (`WingsTouchScroll`)
+- [x] Taps whose touch starts and ends in one frame activate widgets
+- [x] One back press closes one layer: menu, then dialog, then sheet, then the screen
+      (`WingsBack`, `WingsBackSystems`)
 
 ### Navigation
 
+- [x] Android back button and back gesture go back a screen; at the first screen the app stays
+      open
+- [~] Android 13+ predictive back needs `android:enableOnBackInvokedCallback="false"` in the
+      app manifest (documented; no Android packaging in this repository)
+- [x] iOS edge swipe back: interactive, parallax, completes past a third or on a flick
+      (`WingsEdgeSwipeBack`)
+- [x] Directional tab switches: `nav_entry(..).tab(i)`, pages slide in from the side of the
+      selected tab
 - [x] Navigation results (`WingsNavigator::pop_with_result`, `WingsNavResultReceived`)
 - [x] Deep links (`WingsDeepLinks`, custom schemes and web links, command line links)
 - [x] Saving and restoring the back stack (`WingsBackStackPersistencePlugin`, file and memory

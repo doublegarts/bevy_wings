@@ -782,6 +782,26 @@ pub struct WingsDialogMessage;
 #[derive(Component, Debug, Default, Clone, Copy)]
 pub struct WingsDialogActions;
 
+/// Dismisses open dialogs on back (Escape, gamepad B), like their dismiss button.
+pub fn dismiss_dialogs_on_back(
+    mut back: ResMut<bevy_wings_ui_core::back::WingsBack>,
+    mut dialogs: Query<(Entity, &mut WingsAnimatedVisibility), With<WingsDialog>>,
+    mut commands: Commands,
+) {
+    if !dialogs.iter().any(|(_, v)| v.visible) || !back.consume() {
+        return;
+    }
+    for (entity, mut visibility) in &mut dialogs {
+        if visibility.visible {
+            visibility.visible = false;
+            commands.trigger(WingsDialogResult {
+                entity,
+                confirmed: false,
+            });
+        }
+    }
+}
+
 /// Observer: forwards dialog button clicks as [`WingsDialogResult`] and closes the dialog.
 pub fn dialog_button_clicked(
     ev: On<Activate>,

@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/bevy-wings-white.png">
+    <img src="assets/branding/bevy-wings.png" alt="Wings logo" width="360">
+  </picture>
+</p>
+
 # Wings Framework for Bevy
 
 [![crates.io](https://img.shields.io/crates/v/bevy_wings.svg)](https://crates.io/crates/bevy_wings)
@@ -391,6 +398,12 @@ bsn! {
 
 `WingsCheckbox` traces its check mark from the starting point through the corner to the tip over 220 ms. Unchecking erases the stroke in reverse. The mark is drawn with UI geometry and follows the theme. `WingsSlider` supports both dragging the thumb and clicking the track to move directly to that position.
 
+On touch screens every scroll area (scroll columns, lists, virtual lists) follows the finger
+and keeps gliding after a flick, slowing down like iOS and Android; touching it stops the
+glide, and a drag that turns into a scroll cancels the tap under the finger
+(`WingsTouchScroll` configures it). Quick taps whose touch starts and ends within one frame
+activate widgets reliably.
+
 Keyboard focus shows a focus ring in the design's style (`WingsNoFocusRing` opts out). Every
 interactive widget also joins directional navigation: the D-pad, the left stick and the arrow
 keys move focus, A (South) activates and B (East) closes popups and sheets and pops the
@@ -496,6 +509,14 @@ content keeps scrolling underneath: an overlay camera draws the floating chrome,
 pass blurs what lies below it (dual Kawase blur at half and quarter resolution) and
 `WingsLiquidGlassMaterial` refracts that blur with a rim light. Without the `shaders` feature
 the glass falls back to a translucent material color. `WingsGlass` puts any node on glass.
+
+The navigation bar follows iOS 26 as well. Its buttons sit on their own glass capsules. The
+soft scroll edge effect (`WingsScrollEdgeMaterial`) covers the status bar and the toolbar row:
+content that scrolls into it blurs progressively, settles into the background color and fades
+out a little below the bar, without a hard edge. The large title moves up and fades with the
+scroll, then the inline title fades in, centered on the bar like UIKit's, moved only when the
+buttons leave no room and shortened with "…" when it still does not fit. Both follow the
+scroll offset, so scrolling back reverses them exactly.
 
 ## Theming: the ECS theme
 
@@ -746,13 +767,25 @@ fn open_message(mut stack: ResMut<WingsBackStack<Screen>>) {
   destination.
 * Adaptive panes: with the default `NavSceneStrategy::ListDetail`, a list destination and the
   detail destination above it are shown side by side from the `Expanded` width class.
-* Back input: Escape, the browser back key and the mouse back button pop the stack (disable
-  with `without_back_input()`).
+* **Going back:** Escape, the browser back key, the mouse back button, gamepad B, Android's
+  back button and back gesture, and an edge swipe on iOS go back one screen (disable with
+  `without_back_input()`). One press closes only the topmost layer: an open menu first, then a
+  dialog, then a sheet, and only then the screen. At the first screen the press does nothing,
+  so Android does not close the app. Your own panels join in by consuming `WingsBack` in
+  `WingsBackSystems::Overlays`, and `WingsBack::press()` sends a back from code (for example
+  a toolbar back button).
+* **iOS edge swipe:** dragging from the leading edge moves the screen with the finger and
+  uncovers the previous one with a parallax offset; letting go past a third of the width, or a
+  quick flick, goes back, otherwise it springs back (`WingsEdgeSwipeBack`, on by default on
+  iOS).
 * Each entry root carries a `WingsDiScope`, so scoped dependencies live exactly as long as the
   entry.
-* Back input also includes the gamepad East button. Unless a display sets its own transitions, they
-  follow the design: iOS pushes with a parallax slide, macOS cross fades, Fluent slides up a
+* Unless a display sets its own transitions, they follow the design: iOS pushes with a parallax slide, macOS cross fades, Fluent slides up a
   short entrance and Material slides.
+* **Tabs:** mark top level destinations with their position, `nav_entry(scene).tab(2)`. When
+  the root of the stack changes from one tab to another (a tab bar calling `reset`), the
+  screens slide like pages: a tab to the right comes in from the right, a tab to the left from
+  the left.
 * **Results:** `WingsNavigator<K>::pop_with_result(value)` returns a value to the destination
   below, which receives `WingsNavResultReceived` on its entry root and a
   `WingsNavResultMessage<K>`.
@@ -765,6 +798,16 @@ fn open_message(mut stack: ResMut<WingsBackStack<Screen>>) {
 * **Shared elements:** tag an element on two destinations with the same
   `WingsSharedElement::new("note-42")` and it moves and resizes between them, like SwiftUI's
   `matchedGeometryEffect`.
+
+### Android back button and gesture
+
+Android 13 and newer can handle the back gesture themselves (predictive back) instead of
+sending it to the app. Opt out in your `AndroidManifest.xml`, so the back button and gesture
+reach Wings and go back a screen instead of closing the app:
+
+```xml
+<application android:enableOnBackInvokedCallback="false" ...>
+```
 
 ---
 
@@ -948,7 +991,7 @@ See [tests/visual/README.md](tests/visual/README.md).
 cargo run -p wings-gallery
 ```
 
-The gallery shows a theme switch in the top bar, twenty buttons that follow the theme,
+The gallery shows a light and dark button in the top bar, twenty buttons that follow the theme,
 selection controls, a text field, progress indicators, skeletons, a dialog, snackbars, a
 navigation bar that becomes a rail on wide windows, a DI provided MVVM counter and a Notes
 screen that loads data through a domain use case and an offline first repository. On Linux

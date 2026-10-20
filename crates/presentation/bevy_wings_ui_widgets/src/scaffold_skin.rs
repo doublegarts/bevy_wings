@@ -10,7 +10,8 @@
 //! | List item | 56 tall | 52 tall row | 36 tall row | 40 tall row |
 
 use bevy::prelude::*;
-use bevy::text::{Justify, TextLayout};
+use bevy::text::{Justify, TextLayout, TextLayoutInfo};
+use bevy::ui::UiGlobalTransform;
 use bevy::ui_widgets::ScrollArea;
 
 use bevy_wings_ui_responsive::{
@@ -95,6 +96,264 @@ pub struct WingsResolvedTitle {
     /// The large title collapsed into the toolbar because content scrolled.
     pub collapsed: bool,
 }
+
+/// The full text of an inline title that Wings shortened with an ellipsis to fit between the
+/// bar's buttons.
+#[derive(Component, Debug, Clone, Default, PartialEq)]
+pub struct WingsTitleFit {
+    full: String,
+    full_width: f32,
+    shown: String,
+    chars: usize,
+    inline: bool,
+}
+
+/// The first `chars` characters of `text` followed by an ellipsis.
+///
+/// ```
+/// # use bevy_wings_ui_widgets::scaffold_skin::{ellipsize, inline_title_x};
+/// assert_eq!(ellipsize("Wings gallery", 5), "Wings…");
+/// // A title that fits is centered on the bar...
+/// assert_eq!(inline_title_x(402.0, 0.0, 120.0, 100.0), 151.0);
+/// // ...and moves left just enough when the trailing buttons are wide.
+/// assert_eq!(inline_title_x(402.0, 0.0, 190.0, 150.0), 54.0);
+/// ```
+pub fn ellipsize(text: &str, chars: usize) -> String {
+    let mut out: String = text
+        .chars()
+        .take(chars)
+        .collect::<String>()
+        .trim_end()
+        .to_string();
+    out.push('…');
+    out
+}
+
+/// Characters of a `full_width` wide text that fit in `available`, leaving room for "…".
+pub fn chars_that_fit(text: &str, full_width: f32, available: f32) -> usize {
+    let count = text.chars().count();
+    if full_width <= 0.0 {
+        return count;
+    }
+    let share = (available / full_width).clamp(0.0, 1.0);
+    ((count as f32 * share).floor() as usize)
+        .saturating_sub(1)
+        .max(1)
+}
+
+/// Gap between an inline title and the bar's buttons or edges.
+const TITLE_GAP: f32 = 8.0;
+
+/// Room for an inline title between buttons that reach `leading` and `trailing` in from the
+/// edges of a bar `bar` wide.
+pub fn inline_title_room(bar: f32, leading: f32, trailing: f32) -> f32 {
+    (bar - (leading.max(8.0) + TITLE_GAP) - (trailing.max(8.0) + TITLE_GAP)).max(0.0)
+}
+
+/// Left edge of an inline title `width` wide, like UIKit: centered on the bar, moved only as
+/// far as needed to stay clear of the buttons.
+pub fn inline_title_x(bar: f32, leading: f32, trailing: f32, width: f32) -> f32 {
+    let min = leading.max(8.0) + TITLE_GAP;
+    let max = (bar - trailing.max(8.0) - TITLE_GAP - width).max(min);
+    ((bar - width) / 2.0).clamp(min, max)
+}
+
+/// iOS inline titles: centered between the leading and trailing buttons, vertically centered
+/// in the toolbar row, and shortened with "…" when they do not fit.
+#[allow(clippy::type_complexity)]
+pub fn fit_inline_titles(
+    mut commands: Commands,
+    skin: Res<WingsSkin>,
+    safe: Res<WingsSafeArea>,
+    bars: Query<
+        (
+            &WingsResolvedTitle,
+            &Children,
+            &ComputedNode,
+            &UiGlobalTransform,
+        ),
+        With<WingsTopAppBar>,
+    >,
+    items: Query<
+        (&Node, &ComputedNode, &UiGlobalTransform),
+        (Without<WingsTopAppBarTitle>, Without<WingsTopAppBar>),
+    >,
+    mut titles: Query<
+        (
+            Entity,
+            &mut Node,
+            &mut Text,
+            &TextLayoutInfo,
+            &ComputedNode,
+            Option<&mut WingsTitleFit>,
+        ),
+        (With<WingsTopAppBarTitle>, Without<WingsTopAppBar>),
+    >,
+) {
+    for (resolved, children, bar_node, bar_transform) in &bars {
+        let inline = skin.ios() && !(resolved.large && !resolved.collapsed);
+        let scale = bar_node.inverse_scale_factor;
+        let bar =
+            Rect::from_center_size(bar_transform.translation * scale, bar_node.size() * scale);
+        // How far the buttons reach in from each edge.
+        let (mut leading, mut trailing) = (0.0f32, 0.0f32);
+        for child in children.iter() {
+            let Ok((node, computed, transform)) = items.get(child) else {
+                continue;
+            };
+            // Only buttons in the row count, not overlays such as the scroll edge layer.
+            if node.display == Display::None
+                || node.position_type == PositionType::Absolute
+                || computed.size().x <= 0.0
+            {
+                continue;
+            }
+            let rect =
+                Rect::from_center_size(transform.translation * scale, computed.size() * scale);
+            if rect.center().x < bar.center().x {
+                leading = leading.max(rect.max.x - bar.min.x);
+            } else {
+                trailing = trailing.max(bar.max.x - rect.min.x);
+            }
+        }
+        for child in children.iter() {
+            let Ok((entity, mut node, mut text, info, computed, fit)) = titles.get_mut(child)
+            else {
+                continue;
+            };
+            let Some(mut fit) = fit else {
+                commands.entity(entity).insert(WingsTitleFit {
+                    full: text.0.clone(),
+                    shown: text.0.clone(),
+                    ..default()
+                });
+                continue;
+            };
+            if text.0 != fit.shown {
+                // The app changed the title.
+                fit.full = text.0.clone();
+                fit.shown = text.0.clone();
+                fit.full_width = 0.0;
+                continue;
+            }
+            if fit.inline != inline {
+                // Large and inline titles have different sizes: measure again.
+                fit.inline = inline;
+                fit.full_width = 0.0;
+                fit.chars = 0;
+                if fit.shown != fit.full {
+                    text.0 = fit.full.clone();
+                    fit.shown = fit.full.clone();
+                }
+                continue;
+            }
+            let measured = info.size.x * computed.inverse_scale_factor;
+            if fit.shown == fit.full && measured > 0.0 && !text.is_changed() {
+                fit.full_width = measured;
+            }
+            if !inline {
+                if fit.shown != fit.full {
+                    text.0 = fit.full.clone();
+                    fit.shown = fit.full.clone();
+                }
+                continue;
+            }
+            let available = inline_title_room(bar.width(), leading, trailing);
+            let measured_now = info.size.x * computed.inverse_scale_factor;
+            if measured_now > 0.0 {
+                // Like UIKit: centered on the bar, moved only as far as the buttons require.
+                let x = inline_title_x(bar.width(), leading, trailing, measured_now);
+                if node.left != px(x) || node.right != Val::Auto {
+                    node.left = px(x);
+                    node.right = Val::Auto;
+                }
+            }
+            let height = info.size.y * computed.inverse_scale_factor;
+            if height > 0.0 {
+                let top = px(safe.insets.top + ((IOS_TOOLBAR - height) / 2.0).max(0.0));
+                if node.top != top || node.bottom != Val::Auto {
+                    node.top = top;
+                    node.bottom = Val::Auto;
+                }
+            }
+            if fit.full_width <= 0.0 {
+                continue;
+            }
+            let wanted = if fit.full_width <= available {
+                fit.full.clone()
+            } else if fit.shown == fit.full || fit.chars == 0 {
+                fit.chars = chars_that_fit(&fit.full, fit.full_width, available);
+                ellipsize(&fit.full, fit.chars)
+            } else if measured > available && fit.chars > 1 {
+                // Still too wide: one character less per frame until it fits.
+                fit.chars -= 1;
+                ellipsize(&fit.full, fit.chars)
+            } else {
+                fit.shown.clone()
+            };
+            if wanted != fit.shown {
+                text.0 = wanted.clone();
+                fit.shown = wanted;
+            }
+        }
+    }
+}
+
+/// Marks a top bar button that Wings drew as an iOS 26 glass capsule.
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct WingsBarButtonGlass;
+
+/// iOS 26 toolbar buttons: each button in a top bar sits on its own Liquid Glass capsule,
+/// 44 points tall, with the label in the primary label color. Other designs keep their own
+/// toolbar buttons.
+#[allow(clippy::type_complexity)]
+pub fn skin_bar_buttons(
+    mut commands: Commands,
+    skin: Res<WingsSkin>,
+    bars: Query<&Children, With<WingsTopAppBar>>,
+    buttons: Query<
+        Has<WingsBarButtonGlass>,
+        Or<(
+            With<crate::button::WingsButton>,
+            With<crate::button::WingsIconButton>,
+        )>,
+    >,
+) {
+    let glass = skin.ios();
+    for children in &bars {
+        for child in children.iter() {
+            let Ok(skinned) = buttons.get(child) else {
+                continue;
+            };
+            if glass && !skinned {
+                commands.entity(child).insert((
+                    WingsBarButtonGlass,
+                    WingsGlass::REGULAR.interactive(),
+                    crate::button::WingsButtonOverride {
+                        palette: Some(crate::button::WingsButtonPalette {
+                            container: T,
+                            content: OnSurface,
+                            border: T,
+                            elevation: 1,
+                        }),
+                        min_height: Some(44.0),
+                        grow: false,
+                    },
+                    WingsShape(ShapeRole::Full),
+                ));
+            } else if !glass && skinned {
+                commands.entity(child).remove::<(
+                    WingsBarButtonGlass,
+                    WingsGlass,
+                    crate::button::WingsButtonOverride,
+                )>();
+            }
+        }
+    }
+}
+
+/// Line height of an iOS inline title (17 point headline).
+pub const IOS_INLINE_TITLE_LINE: f32 = 22.0;
 
 /// Height of the iOS toolbar row above a large title.
 pub const IOS_TOOLBAR: f32 = 52.0;
@@ -189,14 +448,9 @@ pub fn layout_top_app_bars(
         node.padding.top = px(inset + if large { 4.0 } else { 0.0 });
         bg.set_if_neq(WingsBackground(background));
         border.set_if_neq(WingsBorderPaint(T));
-        // Scrolled content slides under a frosted bar (the scroll edge effect).
-        if skin.apple() && resolved.collapsed {
-            commands
-                .entity(bar_entity)
-                .insert(WingsGlass::new(WingsGlassStyle::Regular).without_rim());
-        } else {
-            commands.entity(bar_entity).remove::<WingsGlass>();
-        }
+        // Scrolled content slides under the bar with the soft scroll edge effect of iOS and
+        // macOS 26 (see `collapse_large_titles`), not a frosted slab.
+        commands.entity(bar_entity).remove::<WingsGlass>();
         let ios = skin.ios();
         for child in children.iter() {
             if let Ok(mut nav) = navs.get_mut(child) {
@@ -227,10 +481,12 @@ pub fn layout_top_app_bars(
                     title.top = px(inset + IOS_TOOLBAR);
                     title.bottom = Val::Auto;
                 } else {
+                    // Centered in the toolbar row from the first frame; `fit_inline_titles`
+                    // refines it once the text is measured.
                     title.left = px(0);
                     title.right = px(0);
-                    title.top = px(inset);
-                    title.bottom = px(0);
+                    title.top = px(inset + (IOS_TOOLBAR - IOS_INLINE_TITLE_LINE) / 2.0);
+                    title.bottom = Val::Auto;
                 }
                 title.align_self = AlignSelf::Center;
                 title.margin = UiRect::ZERO;
@@ -274,23 +530,42 @@ pub fn layout_top_app_bars(
 
 /// Collapses iOS large titles while the content below them scrolls, like a navigation stack.
 pub fn collapse_large_titles(
+    mut commands: Commands,
     skin: Res<WingsSkin>,
     mut bars: Query<
-        (&ChildOf, Option<&WingsFloating>, &mut WingsResolvedTitle),
+        (
+            Entity,
+            &ChildOf,
+            Option<&WingsFloating>,
+            &mut WingsResolvedTitle,
+            Option<&mut crate::glass::WingsScrollEdge>,
+            Option<&mut WingsTitleScroll>,
+        ),
         With<WingsTopAppBar>,
     >,
+    safe: Res<WingsSafeArea>,
     children: Query<&Children>,
     parents: Query<&ChildOf>,
     scrolls: Query<(&ScrollPosition, &InheritedVisibility), With<ScrollArea>>,
 ) {
-    if !skin.apple() {
-        return;
-    }
-    for (parent, floating, mut resolved) in &mut bars {
+    for (bar, parent, floating, mut resolved, edge, title_scroll) in &mut bars {
+        if !skin.apple() {
+            if edge.is_some() {
+                commands
+                    .entity(bar)
+                    .remove::<crate::glass::WingsScrollEdge>();
+            }
+            if let Some(mut t) = title_scroll
+                && t.0 != 0.0
+            {
+                t.0 = 0.0;
+            }
+            continue;
+        }
         // Floating bars look for scrolling content in their scaffold. Only the screen's own
         // scroll counts, not lists or carousels nested inside it.
         let host = floating.map_or(parent.parent(), |f| f.scaffold);
-        let scrolled = children
+        let offset = children
             .iter_descendants(host)
             .filter(|e| {
                 scrolls.contains(*e)
@@ -301,9 +576,105 @@ pub fn collapse_large_titles(
             })
             .filter_map(|e| scrolls.get(e).ok())
             .filter(|(_, visible)| visible.get())
-            .any(|(position, _)| position.y > 24.0);
+            .map(|(position, _)| position.y)
+            .fold(0.0f32, f32::max);
+        let scrolled = offset > LARGE_TITLE_COLLAPSE;
         if resolved.collapsed != scrolled {
             resolved.collapsed = scrolled;
+        }
+        // The soft scroll edge always covers the status bar and the toolbar row; it shows as
+        // content moves into it, exactly like iOS 26.
+        let height = safe.insets.top + IOS_TOOLBAR;
+        match edge {
+            Some(mut edge) => {
+                if (edge.height - height).abs() > 0.5 {
+                    edge.height = height;
+                }
+            }
+            None => {
+                commands
+                    .entity(bar)
+                    .insert(crate::glass::WingsScrollEdge { height });
+            }
+        }
+        match title_scroll {
+            Some(mut t) => {
+                if (t.0 - offset).abs() > 0.25 {
+                    t.0 = offset;
+                }
+            }
+            None => {
+                commands.entity(bar).insert(WingsTitleScroll(offset));
+            }
+        }
+    }
+}
+
+/// Scroll offset where a large title has gone under the bar and the inline title takes over.
+pub const LARGE_TITLE_COLLAPSE: f32 = 24.0;
+
+/// How far the screen under a top bar has scrolled, in logical pixels.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Default)]
+pub struct WingsTitleScroll(pub f32);
+
+/// Opacity of the large title and of the inline title after scrolling `offset` points, as on
+/// iOS: the large title fades while it slides under the bar, then the inline title fades in.
+pub fn title_opacities(offset: f32) -> (f32, f32) {
+    let large = 1.0 - (offset / LARGE_TITLE_COLLAPSE).clamp(0.0, 1.0);
+    let inline = ((offset - LARGE_TITLE_COLLAPSE) / 16.0).clamp(0.0, 1.0);
+    (large, inline)
+}
+
+/// Moves and fades iOS titles with the scroll offset, so the large and inline titles hand over
+/// without a jump in either direction.
+pub fn title_scroll_effect(
+    skin: Res<WingsSkin>,
+    bars: Query<
+        (&WingsResolvedTitle, &WingsTitleScroll, &Children),
+        (
+            With<WingsTopAppBar>,
+            Or<(Changed<WingsTitleScroll>, Changed<WingsResolvedTitle>)>,
+        ),
+    >,
+    mut commands: Commands,
+    mut titles: Query<
+        (
+            Entity,
+            Option<&mut bevy_wings_ui_core::WingsOpacity>,
+            &mut UiTransform,
+        ),
+        (With<WingsTopAppBarTitle>, Without<WingsTopAppBar>),
+    >,
+) {
+    for (resolved, scroll, children) in &bars {
+        for child in children.iter() {
+            let Ok((entity, opacity, mut transform)) = titles.get_mut(child) else {
+                continue;
+            };
+            let (alpha, lift) = if !skin.ios() || !resolved.large {
+                (1.0, 0.0)
+            } else {
+                let (large, inline) = title_opacities(scroll.0);
+                if resolved.collapsed {
+                    (inline, 0.0)
+                } else {
+                    (large, -scroll.0.clamp(0.0, LARGE_TITLE_COLLAPSE))
+                }
+            };
+            match opacity {
+                Some(mut o) => {
+                    o.set_if_neq(bevy_wings_ui_core::WingsOpacity(alpha));
+                }
+                None => {
+                    commands
+                        .entity(entity)
+                        .insert(bevy_wings_ui_core::WingsOpacity(alpha));
+                }
+            }
+            let translation = Val2::px(0.0, lift);
+            if transform.translation != translation {
+                transform.translation = translation;
+            }
         }
     }
 }
@@ -575,13 +946,22 @@ pub fn skin_navigation_items(
         node.padding = pad;
         node.row_gap = px(gap);
         node.column_gap = px(gap);
-        node.min_width = px(if material {
-            56.0
-        } else if row {
-            0.0
+        if place == ItemPlace::Bar {
+            // Tabs share the bar equally, however long their labels are.
+            node.flex_grow = 1.0;
+            node.flex_basis = px(0);
+            node.min_width = px(0);
         } else {
-            72.0
-        });
+            node.flex_grow = 0.0;
+            node.flex_basis = Val::Auto;
+            node.min_width = px(if material {
+                56.0
+            } else if row {
+                0.0
+            } else {
+                72.0
+            });
+        }
         shape.set_if_neq(WingsShape(item_shape));
         let (selected_fill, selected_content, content) = match (skin.design, place) {
             (WingsDesign::Material, _) => (T, OnSurface, OnSurfaceVariant),

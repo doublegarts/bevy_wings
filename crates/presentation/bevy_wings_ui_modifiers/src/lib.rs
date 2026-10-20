@@ -26,6 +26,11 @@
 //! Note: a modifier *sets* fields. Removing an operation from a chain does not restore the
 //! previous value of that field.
 
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png",
+    html_favicon_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png"
+)]
+
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{

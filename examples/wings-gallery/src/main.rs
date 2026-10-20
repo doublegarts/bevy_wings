@@ -1,6 +1,6 @@
 //! Wings gallery: a small app that exercises the whole toolkit.
 //!
-//! * **Theme**: a switch in the top bar flips light and dark. Twenty buttons on the home
+//! * **Theme**: the moon button in the top bar flips light and dark. Twenty buttons on the home
 //!   screen (and everything else) repaint at once, with a short cross fade.
 //! * **Navigation**: three destinations driven by a [`WingsBackStack`]. On compact windows a
 //!   bottom navigation bar is shown, on wider windows a navigation rail.
@@ -33,6 +33,9 @@ enum Screen {
     Counter,
     Notes,
     Settings,
+    /// Pushed from Settings: shows going back (back button, Escape, Android back, iOS edge
+    /// swipe, gamepad B).
+    WiFi,
 }
 
 impl Screen {
@@ -44,6 +47,7 @@ impl Screen {
             "counter" => Screen::Counter,
             "notes" => Screen::Notes,
             "settings" => Screen::Settings,
+            "wifi" => Screen::WiFi,
             _ => Screen::Home,
         }
     }
@@ -176,11 +180,12 @@ fn wings(app: &mut App) {
         .add_plugins(WingsNavigationPlugin::new(
             Screen::start(),
             |key: &Screen| match key {
-                Screen::Home => nav_entry(home_screen()),
-                Screen::Controls => nav_entry(controls_screen()),
-                Screen::Counter => nav_entry(counter_screen()),
-                Screen::Notes => nav_entry(notes_screen()),
-                Screen::Settings => nav_entry(settings_screen()),
+                Screen::Home => nav_entry(home_screen()).tab(0),
+                Screen::Controls => nav_entry(controls_screen()).tab(1),
+                Screen::Counter => nav_entry(counter_screen()).tab(2),
+                Screen::Notes => nav_entry(notes_screen()).tab(3),
+                Screen::Settings => nav_entry(settings_screen()).tab(4),
+                Screen::WiFi => nav_entry(wifi_screen()),
             },
         ))
         .register_loadable::<Vec<Note>>()
@@ -450,10 +455,8 @@ fn root() -> impl Scene {
                     theme.set_design(next);
                 })
                 --
-                @WingsSwitch { @label: "Dark" }
-                on(|change: On<ValueChange<bool>>, mut theme: ResMut<WingsTheme>| {
-                    theme.mode = if change.value { WingsThemeMode::Dark } else { WingsThemeMode::Light };
-                })
+                @WingsIconButton { @icon: "icons/moon.png" }
+                on(|_: On<Activate>, mut theme: ResMut<WingsTheme>| theme.toggle_dark())
             ]
             --
             @WingsRow { @align: AlignItems::Stretch }
@@ -504,10 +507,15 @@ fn home_screen() -> impl Scene {
                 height: px(180),
                 padding: px(20),
                 border_radius: BorderRadius::all(px(26)),
-                align_items: AlignItems::End,
+                flex_direction: FlexDirection::Column,
+                justify_content: JustifyContent::SpaceBetween,
+                align_items: AlignItems::Start,
             }
             hero
             Children [
+                Node { width: px(96), height: px(40) }
+                ImageNode { image: "branding/bevy-wings-white.png" }
+                --
                 @WingsText { @text: "Wings 0.2", @role: TypeRole::HeadlineLarge }
                 WingsForeground({WingsPaint::Fixed(Color::WHITE)})
             ]
@@ -515,7 +523,7 @@ fn home_screen() -> impl Scene {
             @WingsText { @text: "Theme aware buttons", @role: TypeRole::HeadlineSmall }
             --
             @WingsText {
-                @text: "Flip the switch in the top bar. Every button repaints from the same theme roles.",
+                @text: "Tap the moon in the top bar. Every button repaints from the same theme roles.",
                 @role: TypeRole::BodyMedium,
                 @color: ColorRole::OnSurfaceVariant,
             }
@@ -786,6 +794,41 @@ fn notes_screen() -> impl Scene {
 }
 
 /// A settings page: grouped list sections with details, accessories and controls.
+/// A pushed screen. Its back button, Escape, Android's back button and gesture, the iOS edge
+/// swipe and gamepad B all go back to Settings.
+fn wifi_screen() -> impl Scene {
+    bsn! {
+        @WingsScrollColumn { @gap: 8.0 }
+        Node { height: percent(100) }
+        Children [
+            @WingsRow { @gap: 4.0, @padding: 8.0 }
+            Children [
+                @WingsIconButton { @icon: "icons/back.png" }
+                on(|_: On<Activate>, mut back: ResMut<WingsBack>| back.press())
+                --
+                @WingsText { @text: "Wi-Fi", @role: TypeRole::TitleLarge }
+            ]
+            --
+            @WingsList
+            Children [
+                @WingsListSection { @footer: "Swipe from the left edge on iOS, or use the system back on Android." }
+                Children [
+                    @WingsListItem { @headline: "Wi-Fi", @icon: "icons/wifi.png", @detail: "On" }
+                ]
+                --
+                @WingsListSection { @header: "Networks" }
+                Children [
+                    @WingsListItem { @headline: "Home", @detail: "Connected" }
+                    --
+                    @WingsListItem { @headline: "Studio 5G" }
+                    --
+                    @WingsListItem { @headline: "Guest" }
+                ]
+            ]
+        ]
+    }
+}
+
 fn settings_screen() -> impl Scene {
     bsn! {
         @WingsScrollColumn
@@ -802,6 +845,7 @@ fn settings_screen() -> impl Scene {
                         @detail: "Home",
                         @accessory: WingsListAccessory::Chevron,
                     }
+                    on(|_: On<Activate>, mut stack: ResMut<WingsBackStack<Screen>>| stack.push(Screen::WiFi))
                     --
                     @WingsListItem {
                         @headline: "Notifications",

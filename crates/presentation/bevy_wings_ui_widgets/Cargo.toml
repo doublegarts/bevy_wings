@@ -16,7 +16,7 @@ default = ["shaders"]
 shaders = ["dep:bevy_wings_ui_shaders"]
 
 [dependencies]
-bevy = { workspace = true, features = ["std", "bevy_ui", "bevy_text", "bevy_scene", "bevy_asset", "bevy_ui_widgets", "bevy_input_focus", "bevy_picking", "ui_picking", "bevy_log", "bevy_image"] }
+bevy = { workspace = true, features = ["std", "bevy_ui", "bevy_text", "bevy_scene", "bevy_asset", "bevy_ui_widgets", "bevy_input_focus", "bevy_picking", "ui_picking", "bevy_log", "bevy_image", "touch"] }
 bevy_wings_ui_core = { workspace = true }
 bevy_wings_ui_animation = { workspace = true }
 bevy_wings_ui_theme = { workspace = true }

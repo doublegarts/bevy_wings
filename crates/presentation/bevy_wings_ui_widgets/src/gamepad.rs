@@ -7,7 +7,7 @@
 //! | --- | --- |
 //! | D-pad, left stick | move focus to the nearest widget in that direction |
 //! | South (A, Cross) | activate the focused widget |
-//! | East (B, Circle) | close the open popup or sheet (navigation pops the back stack) |
+//! | East (B, Circle) | back: closes the open menu, dialog or sheet, else navigation goes back |
 //!
 //! Moving focus shows the design's focus ring and scrolls the focused widget into view.
 //! Arrow keys move focus too unless a text field or slider has focus.
@@ -20,7 +20,6 @@ use bevy::ui::auto_directional_navigation::{AutoDirectionalNavigation, AutoDirec
 use bevy::ui_widgets::{Activate, ScrollIntoView, Slider};
 
 use crate::interaction::WingsInteractive;
-use crate::popup::WingsPopupOwner;
 use crate::text_field::WingsTextFieldInput;
 
 /// Gamepad navigation settings.
@@ -77,7 +76,8 @@ pub fn direction_of(v: Vec2, threshold: f32) -> Option<CompassOctant> {
     })
 }
 
-/// Moves focus, activates and goes back from gamepads and arrow keys.
+/// Moves focus and activates from gamepads and arrow keys. B is back, handled through
+/// [`WingsBack`](bevy_wings_ui_core::back::WingsBack).
 pub fn gamepad_navigation_system(
     mut commands: Commands,
     settings: Res<WingsGamepadNavigation>,
@@ -87,7 +87,6 @@ pub fn gamepad_navigation_system(
     mut visible: Option<ResMut<InputFocusVisible>>,
     mut navigator: AutoDirectionalNavigator,
     text_inputs: Query<(), Or<(With<WingsTextFieldInput>, With<Slider>)>>,
-    mut owners: Query<&mut WingsPopupOwner>,
     mut cooldown: Local<f32>,
 ) {
     if !settings.enabled {
@@ -97,7 +96,6 @@ pub fn gamepad_navigation_system(
     let focused = navigator.manual_directional_navigation.focus.get();
     let mut direction = None;
     let mut activate = false;
-    let mut back = false;
     for gamepad in &gamepads {
         let mut v = gamepad.left_stick();
         if gamepad.pressed(GamepadButton::DPadUp) {
@@ -114,7 +112,6 @@ pub fn gamepad_navigation_system(
         }
         direction = direction.or(direction_of(v, settings.stick_threshold));
         activate |= gamepad.just_pressed(GamepadButton::South);
-        back |= gamepad.just_pressed(GamepadButton::East);
     }
     if settings.arrow_keys
         && direction.is_none()
@@ -151,13 +148,6 @@ pub fn gamepad_navigation_system(
     }
     if activate && let Some(entity) = focused {
         commands.trigger(Activate { entity });
-    }
-    if back {
-        for mut owner in &mut owners {
-            if owner.open {
-                owner.open = false;
-            }
-        }
     }
 }
 

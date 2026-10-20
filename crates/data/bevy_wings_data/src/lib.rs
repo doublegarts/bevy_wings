@@ -27,6 +27,11 @@
 //! commands.entity(screen).load(move || repo.all());
 //! ```
 
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png",
+    html_favicon_url = "https://raw.githubusercontent.com/doublegarts/bevy_wings/main/assets/branding/bevy-wings-icon.png"
+)]
+
 mod cache;
 mod codec;
 #[cfg(feature = "database")]

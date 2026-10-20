@@ -2,7 +2,7 @@
 //!
 //! A sheet is a panel that slides in over the content with a dimming scrim behind it. Show or
 //! hide it by setting [`WingsAnimatedVisibility::visible`]; clicking the scrim or pressing
-//! Escape hides it and triggers [`WingsSheetDismissed`]. Children of the sheet are its
+//! back (Escape, gamepad B) hides it and triggers [`WingsSheetDismissed`]. Children of the sheet are its
 //! content.
 //!
 //! | Design | Bottom sheet | Side sheet |
@@ -22,6 +22,7 @@
 use bevy::prelude::*;
 
 use bevy_wings_ui_animation::prelude::{WingsAnimatedVisibility, WingsTransition};
+use bevy_wings_ui_core::back::WingsBack;
 use bevy_wings_ui_responsive::WingsViewport;
 use bevy_wings_ui_theme::prelude::{
     ColorRole, ShapeRole, TypeRole, WingsBackground, WingsBorderPaint, WingsContentColor,
@@ -350,13 +351,13 @@ pub fn dismiss_sheet_on_scrim(
     }
 }
 
-/// Escape dismisses open sheets.
-pub fn dismiss_sheets_on_escape(
-    keys: Option<Res<ButtonInput<KeyCode>>>,
+/// Back (Escape, gamepad B) dismisses open sheets when no menu or dialog above them used it.
+pub fn dismiss_sheets_on_back(
+    mut back: ResMut<WingsBack>,
     mut sheets: Query<(Entity, &mut WingsAnimatedVisibility), With<WingsSheetEdge>>,
     mut commands: Commands,
 ) {
-    if !keys.is_some_and(|k| k.just_pressed(KeyCode::Escape)) {
+    if !sheets.iter().any(|(_, v)| v.visible) || !back.consume() {
         return;
     }
     for (entity, mut visibility) in &mut sheets {
