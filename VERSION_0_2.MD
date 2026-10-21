@@ -122,6 +122,12 @@ Liquid Glass, screenshots) is checked by the visual regression harness or by han
       regression` workflow on a macOS runner): 48 cases rendered offscreen with a fixed frame
       time, identical across runs locally; baselines are seeded from the runner
 - [x] Workspace at version 0.2.0, release check passes
+- [x] Rust 1.97.1 (MSRV) builds every target with all features
+- [x] Every library crate packages and builds from its packaged sources
+      (`cargo publish --dry-run`)
+- [x] The libraries build on Linux without choosing X11 or Wayland (winit only on Apple mobile
+      targets)
+- [x] [CHANGELOG.md](CHANGELOG.md) with release notes and upgrade notes from 0.1
 
 ### Known limitations
 

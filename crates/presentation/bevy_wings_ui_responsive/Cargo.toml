@@ -14,9 +14,15 @@ categories.workspace = true
 bevy = { workspace = true, features = ["std", "bevy_ui", "bevy_window", "bevy_text", "bevy_picking"] }
 bevy_wings_ui_core = { workspace = true }
 
+# iOS, iPadOS, visionOS and tvOS insets come from winit. Only those targets enable it here, so
+# the crate still builds on Linux, where winit needs the app to pick X11 or Wayland.
+[target.'cfg(any(target_os = "ios", target_os = "visionos", target_os = "tvos"))'.dependencies]
+bevy = { workspace = true, features = ["bevy_winit"] }
+
 [features]
-## Reads safe areas from the platform (iOS, Android, macOS title bars) through winit.
-native = ["bevy/bevy_winit"]
+## Reads safe areas from the platform: iOS (winit), Android (the activity's content rectangle)
+## and macOS title bars.
+native = []
 
 [lints]
 workspace = true

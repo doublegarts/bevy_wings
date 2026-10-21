@@ -1084,13 +1084,14 @@ with **dry_run checked**. This verifies every package without uploading or requi
 You can also verify locally while your checkout has uncommitted changes:
 
 ```bash
-python3 scripts/check-release.py --tag v0.1.0
+python3 scripts/check-release.py --tag v0.2.0
 cargo publish --workspace --exclude wings-gallery --dry-run --allow-dirty --locked
 ```
 
-To publish version 0.1.0, commit and push the reviewed changes, wait for CI to pass, then
-create and publish a GitHub release with the tag **`v0.1.0`** targeting that commit. The release
-workflow publishes the crates. This setup does not upload anything until you publish a release
+To publish version 0.2.0, commit and push the reviewed changes, wait for CI to pass, then
+create and publish a GitHub release with the tag **`v0.2.0`** targeting that commit, using the
+0.2.0 section of [CHANGELOG.md](CHANGELOG.md) as its notes. The release workflow publishes the
+crates. This setup does not upload anything until you publish a release
 or manually run the publish workflow on a version tag with **dry_run unchecked**.
 
 For later releases, update `[workspace.package].version` and every internal dependency version
@@ -1101,7 +1102,8 @@ inspect the workflow log and registry before retrying to confirm which packages 
 
 ## Roadmap
 
-See [VERSION_0_2.MD](VERSION_0_2.MD) for this release's checklist and what is planned next, and
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each release (with upgrade notes),
+[VERSION_0_2.MD](VERSION_0_2.MD) for this release's checklist and what is planned next, and
 [VERSION_0_1.MD](VERSION_0_1.MD) for the first release.
 
 ---
